@@ -213,6 +213,30 @@ async fn check_command(command: &str, args: &[&str], tool: &str) -> ToolCheck {
 }
 
 #[tauri::command]
+pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolCheck>, String> {
+    let root = PathBuf::from(&root_path).canonicalize().map_err(|e| format!("Project workspace is unavailable: {e}"))?;
+    if !root.is_dir() { return Err("Project root is not a directory.".into()); }
+
+    let is_droidlab = root.join("scripts/build-linux.sh").is_file() && root.join("src/app.py").is_file();
+    let checks = check_build_tools().await;
+    if !is_droidlab { return Ok(checks); }
+
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    let (tkinter, pyinstaller, appimagetool, wget, tar, xz, bash) = tokio::join!(
+        check_command(python, &["-c", "import tkinter; print('Tkinter import OK')"], "Tkinter"),
+        check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller"),
+        check_command("appimagetool", &["--version"], "appimagetool"),
+        check_command("wget", &["--version"], "wget"),
+        check_command("tar", &["--version"], "tar"),
+        check_command("xz", &["--version"], "xz"),
+        check_command("bash", &["--version"], "Bash"),
+    );
+    let mut all = checks;
+    all.extend([tkinter, pyinstaller, appimagetool, wget, tar, xz, bash]);
+    Ok(all)
+}
+
+#[tauri::command]
 pub async fn check_build_tools() -> Vec<ToolCheck> {
     // Run independent probes concurrently so a slow tool cannot block the entire report.
     let (node, npm, python, cargo, flutter, java, gradle, adb, sdkmanager) = tokio::join!(
