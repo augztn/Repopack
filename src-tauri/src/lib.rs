@@ -98,7 +98,14 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
             return Err("The ZIP file exceeds the 100 MB size limit for this preview.".into());
         }
         let name = path.file_stem().and_then(|n| n.to_str()).unwrap_or("local-project").to_string();
-        let bytes = fs::read(&path).map_err(|e| format!("Could not read the selected ZIP file: {e}"))?;
+        // The file may change after metadata is read, so cap the actual read too.
+        let file = File::open(&path).map_err(|e| format!("Could not open the selected ZIP file: {e}"))?;
+        let mut bytes = Vec::new();
+        file.take(MAX_ARCHIVE_BYTES as u64 + 1).read_to_end(&mut bytes)
+            .map_err(|e| format!("Could not read the selected ZIP file: {e}"))?;
+        if bytes.len() > MAX_ARCHIVE_BYTES {
+            return Err("The ZIP file exceeds the 100 MB size limit for this preview.".into());
+        }
         (bytes, name)
     };
 
