@@ -505,7 +505,7 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
                 let path = entry.path();
                 let is_appimage = path.extension().and_then(|e| e.to_str()).map(|ext| ext.eq_ignore_ascii_case("AppImage")).unwrap_or(false)
                     || path.file_name().and_then(|n| n.to_str()).map(|name| name.to_ascii_lowercase().contains(".appimage")).unwrap_or(false);
-                if is_appimage && path.is_file() && !artifacts.iter().any(|item| item.path == path.to_string_lossy()) {
+                if is_appimage && path.is_file() && !artifacts.iter().any(|item| item.path == path.to_string_lossy().to_string()) {
                     let metadata = entry.metadata().ok();
                     artifacts.push(BuildArtifact {
                         name: entry.file_name().to_string_lossy().into_owned(),
