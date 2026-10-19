@@ -148,7 +148,7 @@ export default function App() {
     try {
       const outcome = await invoke<BuildResult>("run_approved_build", { rootPath: result.rootPath, profile: buildProfile });
       setBuildResult(outcome);
-      setPhase(outcome.success ? "Build complete" : "Build failed");
+      setPhase(outcome.success ? "Build complete" : outcome.message.toLowerCase().includes("cancel") ? "Build cancelled" : outcome.message.toLowerCase().includes("timed out") ? "Build timed out" : "Build failed");
     } catch (error) {
       setPhase("Build failed");
       setLogs((current) => [...current, `[error] ${String(error)}`]);
@@ -253,7 +253,7 @@ export default function App() {
                 <option value="flutter-apk">Flutter — Android APK</option>
                 <option value="android-debug-apk">Android Gradle — debug APK</option>
               </select>
-              <button type="button" className="button button-primary" onClick={runBuild} disabled={building}>{building ? <><span className="spinner" /> Building…</> : <>Approve &amp; build <span>→</span></>}</button>
+              <div className="build-action-buttons"><button type="button" className="button button-primary" onClick={runBuild} disabled={building}>{building ? <><span className="spinner" /> Building…</> : <>Approve &amp; build <span>→</span></>}</button>{building && <button type="button" className="button button-secondary" onClick={async () => { try { await invoke("cancel_build"); setLogs((current) => [...current, "[warning] Cancellation requested."]); } catch (error) { setLogs((current) => [...current, `[error] Could not cancel build: ${String(error)}`]); } }}>Cancel build</button>}</div>
             </div>
             {toolChecks && <div className="tool-check-grid">{toolChecks.map((tool) => <div className={`tool-check ${tool.available ? "available" : "missing"}`} key={tool.tool}><span>{tool.available ? "✓" : "×"}</span><div><strong>{tool.tool}</strong><small>{tool.version ?? tool.message}</small></div></div>)}</div>}
             {buildResult && <div className={`build-result ${buildResult.success ? "available" : "missing"}`}><strong>{buildResult.success ? "Build completed" : "Build failed"}</strong><p>{buildResult.message}</p></div>}
