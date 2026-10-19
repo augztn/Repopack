@@ -220,6 +220,12 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             }
             ("npm", vec!["run", "tauri", "--", "build"], "npm run tauri build")
         }
+        "rust-release" => {
+            if !root.join("Cargo.toml").is_file() {
+                return Err("Rust release builds require Cargo.toml in the project root.".into());
+            }
+            ("cargo", vec!["build", "--release"], "cargo build --release")
+        }
         "node-build" => {
             if !root.join("package.json").is_file() {
                 return Err("This profile requires package.json in the project root.".into());
