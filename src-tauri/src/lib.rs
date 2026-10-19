@@ -365,8 +365,10 @@ fn detect_project(root: &Path) -> (String, Vec<String>, String) {
         return ("python-desktop".into(), indicators,
             "Python desktop entry point found. Review dependencies and select desktop packaging appropriate for the current operating system.".into());
     }
-    if root.join("pyproject.toml").is_file() || root.join("requirements.txt").is_file() {
-        return ("python".into(), indicators, "Choose an explicit packaging profile (for example PyInstaller) and review dependency installation before execution.".into());
+    if root.join("pyproject.toml").is_file() || root.join("requirements.txt").is_file()
+        || root.join("src/app.py").is_file() || root.join("main.py").is_file() || root.join("app.py").is_file()
+    {
+        return ("python".into(), indicators, "Python entry point or dependency manifest found. Review the project entry point and packaging script before building.".into());
     }
     if root.join("Cargo.toml").is_file() {
         return ("rust".into(), indicators, "Review Cargo targets and manifests; this repository may be a library or CLI rather than a desktop GUI app.".into());
