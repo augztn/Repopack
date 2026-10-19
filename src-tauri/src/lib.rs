@@ -73,7 +73,9 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
         }
 
         // Enforce the size cap while reading; do not buffer an unbounded HTTP response.
+        let expected_bytes = response.content_length();
         let mut bytes = Vec::new();
+        let mut last_progress_bytes = 0usize;
         while let Some(chunk) = response
             .chunk()
             .await
@@ -83,6 +85,11 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
                 return Err("The repository archive exceeds the 100 MB download limit for this preview.".into());
             }
             bytes.extend_from_slice(&chunk);
+            if bytes.len().saturating_sub(last_progress_bytes) >= 5 * 1024 * 1024 {
+                let total = expected_bytes.map(|n| format!(" of {:.1} MB", n as f64 / (1024.0 * 1024.0))).unwrap_or_default();
+                log(&app, "info", format!("Downloaded {:.1} MB{}.", bytes.len() as f64 / (1024.0 * 1024.0), total));
+                last_progress_bytes = bytes.len();
+            }
         }
         (bytes, repo)
     } else {
