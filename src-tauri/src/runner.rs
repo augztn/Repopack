@@ -241,6 +241,7 @@ pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolChec
         let python = "python3";
         for (name, available, message) in [
             ("Tkinter", OsCommand::new(python).args(["-c", "import tkinter"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python Tkinter module"),
+            ("TkinterDnD", OsCommand::new(python).args(["-c", "import tkinterdnd2"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python tkinterdnd2 dependency from requirements.txt"),
             ("PyInstaller", OsCommand::new(python).args(["-m", "PyInstaller", "--version"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python packaging module"),
         ] {
             all.push(ToolCheck { tool: name.into(), available, version: None, message: message.into() });
