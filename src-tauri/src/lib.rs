@@ -302,6 +302,18 @@ fn detect_project(root: &Path) -> (String, Vec<String>, String) {
     ("unknown".into(), indicators, "Project type was not recognized. Inspect the README and define a reviewed build profile before running commands.".into())
 }
 
+fn package_has_script(root: &Path, script: &str) -> bool {
+    let manifest = match fs::read_to_string(root.join("package.json")) {
+        Ok(text) => text,
+        Err(_) => return false,
+    };
+    let value: serde_json::Value = match serde_json::from_str(&manifest) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    value.get("scripts").and_then(|scripts| scripts.get(script)).and_then(serde_json::Value::as_str).is_some()
+}
+
 fn package_has_dependency(root: &Path, dependency: &str) -> bool {
     let manifest = match fs::read_to_string(root.join("package.json")) {
         Ok(text) => text,
