@@ -9,7 +9,7 @@ Repopack is a local-first repository inspection and build-preparation app. The f
 - **Tauri 2 + Rust:** local files, archive extraction, native process/build orchestration.
 - **React + TypeScript + Vite:** dashboard UI and live job logs.
 - **Tauri dialog plugin:** native ZIP file picker.
-- **Platform adapters:** Node/Electron/Tauri, Flutter, Android Gradle, Python, and static web projects.
+- **Platform adapters:** Node/Electron/Tauri, Flutter, Android Gradle, Python/PyInstaller, Rust/Cargo, and static web projects.
 
 ## Requirements
 
@@ -77,10 +77,12 @@ A source repository cannot always be turned into an app by one generic command. 
 ## Current build-runner limitations
 
 - The `npm-install` profile uses `npm ci` when a package lock exists, otherwise `npm install`; dependency lifecycle scripts may execute arbitrary code, so review the repository before approving. The UI also exposes build cancellation and a 30-minute timeout for the main process, but subprocess trees are not yet fully sandboxed or guaranteed to terminate.
-- The Electron profile currently invokes the repository's `npm run build` script; that script may not create a distributable installer.
+- The Electron build profile invokes `npm run build`; the separate Electron packaging profile requires a declared `dist`, `make`, or `package` script. Both depend on the repository's own packaging configuration.
+- Python packaging supports a root `main.py`, `app.py`, or `run.py` entry point with PyInstaller installed; more complex project entry points need configuration.
 - Tool detection is informational; a tool being present does not guarantee the project is compatible with the selected profile.
 - Build subprocesses have a 30-minute main-process timeout, but this is not a complete sandbox and does not guarantee every descendant process is terminated. Do not use this preview with untrusted projects.
 - Artifact discovery is best-effort and scans common output file types; it does not prove that a package is installable or signed. Artifacts can be exported through the native save dialog.
+- Python dependency setup and PyInstaller packaging require Python 3 and the relevant project dependencies. Rust projects can use `cargo build --release`.
 - Android APK creation needs Android SDK/Java/Gradle or Flutter tooling as appropriate. Available targets depend on the tools installed on the desktop host.
 
 
