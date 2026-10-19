@@ -348,4 +348,26 @@ mod tests {
     fn rejects_missing_repository_segment() {
         assert!(parse_github_url("https://github.com/owner").is_err());
     }
+
+    #[test]
+    fn detects_electron_from_manifest_dependencies() {
+        let root = std::env::temp_dir().join(format!("repopack-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("package.json"), r#"{"devDependencies":{"electron":"^30.0.0"}}"#).unwrap();
+        let (project_type, indicators, _) = super::detect_project(&root);
+        assert_eq!(project_type, "electron");
+        assert!(indicators.iter().any(|marker| marker == "package.json"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn detects_tauri_before_generic_node_project() {
+        let root = std::env::temp_dir().join(format!("repopack-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(root.join("src-tauri")).unwrap();
+        fs::write(root.join("package.json"), r#"{"devDependencies":{"vite":"^6.0.0"}}"#).unwrap();
+        fs::write(root.join("src-tauri/tauri.conf.json"), "{}").unwrap();
+        let (project_type, _, _) = super::detect_project(&root);
+        assert_eq!(project_type, "tauri");
+        fs::remove_dir_all(root).unwrap();
+    }
 }
