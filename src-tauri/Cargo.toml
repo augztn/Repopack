@@ -1,0 +1,23 @@
+[package]
+name = "repopack"
+version = "0.1.0"
+description = "Local-first repository inspection and build preparation"
+authors = ["Repopack contributors"]
+edition = "2021"
+
+[lib]
+name = "repopack_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+tauri = { version = "2" }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+zip = "2.2"
+uuid = { version = "1", features = ["v4"] }
+url = "2"
