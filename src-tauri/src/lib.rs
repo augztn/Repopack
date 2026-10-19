@@ -317,3 +317,34 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running Repopack");
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::parse_github_url;
+
+    #[test]
+    fn parses_standard_repository_url() {
+        assert_eq!(parse_github_url("https://github.com/owner/project").unwrap(), ("owner".to_string(), "project".to_string()));
+    }
+
+    #[test]
+    fn strips_git_suffix() {
+        assert_eq!(parse_github_url("https://github.com/owner/project.git").unwrap(), ("owner".to_string(), "project".to_string()));
+    }
+
+    #[test]
+    fn rejects_http_repository_urls() {
+        assert!(parse_github_url("http://github.com/owner/project").is_err());
+    }
+
+    #[test]
+    fn rejects_non_github_hosts() {
+        assert!(parse_github_url("https://example.com/owner/project").is_err());
+    }
+
+    #[test]
+    fn rejects_missing_repository_segment() {
+        assert!(parse_github_url("https://github.com/owner").is_err());
+    }
+}
