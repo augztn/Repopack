@@ -229,7 +229,7 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             if cfg!(windows) {
                 ("cmd", vec!["/C", "gradlew.bat", "assembleDebug"], "Gradle assembleDebug")
             } else {
-                ("./gradlew", vec!["assembleDebug"], "Gradle assembleDebug")
+                ("sh", vec!["gradlew", "assembleDebug"], "Gradle assembleDebug")
             }
         }
         _ => return Err("Unknown build profile. Only listed, user-approved profiles are accepted.".into()),
