@@ -311,27 +311,6 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         }
     };
     if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
-                return Err(format!("Could not wait for build process: {error}"));
-            }
-            Err(_) => {
-                emit(&app, "warning", "Build exceeded the 30-minute limit; terminating the main build process.");
-                let _ = child.kill().await;
-                let _ = child.wait().await;
-                stdout_task.abort();
-                stderr_task.abort();
-                (None, false, true, false)
-            }
-        },
-        _ = cancel_rx => {
-            emit(&app, "warning", "Build cancellation requested; terminating the main build process.");
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            stdout_task.abort();
-            stderr_task.abort();
-            (None, false, false, true)
-        }
-    };
-    if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
     let (exit_code, success, timed_out, cancelled) = outcome;
     if !timed_out && !cancelled {
         let _ = stdout_task.await;
