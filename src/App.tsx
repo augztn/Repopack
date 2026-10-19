@@ -5,7 +5,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 type LogEvent = { level: string; message: string };
 type ToolCheck = { tool: string; available: boolean; version?: string; message: string };
-type BuildResult = { profile: string; exitCode?: number; success: boolean; message: string };
+type BuildArtifact = { name: string; path: string; sizeBytes: number; kind: string };
+type BuildResult = { profile: string; exitCode?: number; success: boolean; message: string; artifacts: BuildArtifact[] };
 type SourceInfo = {
   name: string;
   rootPath: string;
@@ -253,6 +254,17 @@ export default function App() {
             </div>
             {toolChecks && <div className="tool-check-grid">{toolChecks.map((tool) => <div className={`tool-check ${tool.available ? "available" : "missing"}`} key={tool.tool}><span>{tool.available ? "✓" : "×"}</span><div><strong>{tool.tool}</strong><small>{tool.version ?? tool.message}</small></div></div>)}</div>}
             {buildResult && <div className={`build-result ${buildResult.success ? "available" : "missing"}`}><strong>{buildResult.success ? "Build completed" : "Build failed"}</strong><p>{buildResult.message}</p></div>}
+            {buildResult?.artifacts?.length > 0 && <div className="artifact-panel">
+              <div className="artifact-heading"><strong>Detected output artifacts</strong><span>{buildResult.artifacts.length} FILE{buildResult.artifacts.length === 1 ? "" : "S"}</span></div>
+              {buildResult.artifacts.map((artifact) => <div className="artifact-row" key={artifact.path}>
+                <div className="artifact-file-icon">{artifact.kind}</div>
+                <div className="artifact-meta"><strong>{artifact.name}</strong><small>{artifact.path}</small><small>{artifact.sizeBytes < 1024 * 1024 ? `${(artifact.sizeBytes / 1024).toFixed(1)} KB` : `${(artifact.sizeBytes / (1024 * 1024)).toFixed(2)} MB`}</small></div>
+                <button type="button" className="button button-secondary" onClick={async () => {
+                  try { await invoke("open_artifact_folder", { artifactPath: artifact.path }); }
+                  catch (error) { setLogs((current) => [...current, `[error] Could not open artifact folder: ${String(error)}`]); }
+                }}>Open folder ↗</button>
+              </div>)}
+            </div>}
           </section>}
 
           <section className="console-section">
