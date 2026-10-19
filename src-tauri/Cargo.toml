@@ -24,4 +24,4 @@ url = "2"
 
 [dependencies.tokio]
 version = "1"
-features = ["process", "io-util", "macros", "rt", "time"]
+features = ["process", "io-util", "macros", "rt", "time", "sync"]
