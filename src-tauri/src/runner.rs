@@ -274,6 +274,7 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
     {
         let mut slot = state.cancellation.lock().map_err(|_| "Build state is unavailable.")?;
         if slot.is_some() {
+            drop(slot);
             let _ = child.kill().await;
             return Err("Another build is already running.".into());
         }
