@@ -198,7 +198,7 @@ export default function App() {
     "python-install": ["Python", "Python 3"],
     "python-package": ["Python", "Python 3"],
     "python-desktop-package": ["Python", "Python 3"],
-    "droidlab-appimage": ["Python", "Python 3"],
+    "droidlab-appimage": ["Python", "Python 3", "Tkinter", "TkinterDnD", "PyInstaller", "appimagetool", "wget", "tar", "xz", "Bash"],
     "electron-build": ["Node.js", "npm"],
     "electron-package": ["Node.js", "npm"],
     "flutter-windows": ["Flutter"],
