@@ -254,7 +254,7 @@ export default function App() {
             </div>
             {toolChecks && <div className="tool-check-grid">{toolChecks.map((tool) => <div className={`tool-check ${tool.available ? "available" : "missing"}`} key={tool.tool}><span>{tool.available ? "✓" : "×"}</span><div><strong>{tool.tool}</strong><small>{tool.version ?? tool.message}</small></div></div>)}</div>}
             {buildResult && <div className={`build-result ${buildResult.success ? "available" : "missing"}`}><strong>{buildResult.success ? "Build completed" : "Build failed"}</strong><p>{buildResult.message}</p></div>}
-            {buildResult?.artifacts?.length > 0 && <div className="artifact-panel">
+            {Boolean(buildResult?.artifacts?.length) && <div className="artifact-panel">
               <div className="artifact-heading"><strong>Detected output artifacts</strong><span>{buildResult.artifacts.length} FILE{buildResult.artifacts.length === 1 ? "" : "S"}</span></div>
               {buildResult.artifacts.map((artifact) => <div className="artifact-row" key={artifact.path}>
                 <div className="artifact-file-icon">{artifact.kind}</div>
