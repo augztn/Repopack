@@ -143,10 +143,32 @@ fn approved_workspace(app: &AppHandle, root: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+fn check_android_sdk() -> ToolCheck {
+    let sdk_path = std::env::var_os("ANDROID_HOME")
+        .or_else(|| std::env::var_os("ANDROID_SDK_ROOT"))
+        .map(PathBuf::from);
+    match sdk_path.filter(|path| path.is_dir()) {
+        Some(path) => ToolCheck {
+            tool: "Android SDK".into(),
+            available: true,
+            version: Some(path.to_string_lossy().into_owned()),
+            message: "SDK directory found".into(),
+        },
+        None => ToolCheck {
+            tool: "Android SDK".into(),
+            available: false,
+            version: None,
+            message: "Set ANDROID_HOME or ANDROID_SDK_ROOT to an existing SDK directory".into(),
+        },
+    }
+}
+
 async fn check_command(command: &str, args: &[&str], tool: &str) -> ToolCheck {
     match Command::new(command).args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).output().await {
         Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).lines().next().unwrap_or("").trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let version = stdout.lines().next().filter(|line| !line.trim().is_empty()).or_else(|| stderr.lines().next()).unwrap_or("").trim().to_string();
             ToolCheck { tool: tool.into(), available: true, version: if version.is_empty() { None } else { Some(version) }, message: "Available".into() }
         }
         Ok(output) => {
@@ -169,6 +191,7 @@ pub async fn check_build_tools() -> Vec<ToolCheck> {
         check_command("gradle", &["--version"], "Gradle").await,
         check_command("adb", &["version"], "Android Debug Bridge").await,
         check_command("sdkmanager", &["--version"], "Android SDK Manager").await,
+        check_android_sdk(),
     ];
     // Python is commonly installed under python3 on Linux/macOS.
     if !checks[2].available {
