@@ -294,7 +294,7 @@ export default function App() {
           </section>}
 
           {result && <section className="result-card panel build-controls">
-            <div className="result-heading"><div><div className="eyebrow">LOCAL TOOLCHAIN</div><h2>Build this project</h2></div><button type="button" className="button button-secondary" onClick={checkTools} disabled={checkingTools}>{checkingTools ? "Checking…" : "Check tools"}</button></div>
+            <div className="result-heading"><div><div className="eyebrow">LOCAL TOOLCHAIN</div><h2>Build this project</h2></div><button type="button" className="button button-secondary" onClick={() => checkTools()} disabled={checkingTools}>{checkingTools ? "Checking…" : "Check tools"}</button></div>
             <p className="result-path">Auto-detected profile: <strong>{buildProfile}</strong>. Repopack checks available build tools automatically; review the recommendation and approve execution explicitly.</p>
             <div className="build-action-row">
               <label className="build-profile-label" htmlFor="build-profile">AUTO-DETECTED BUILD PROFILE</label>
