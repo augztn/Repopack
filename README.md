@@ -64,7 +64,8 @@ Repopack/
 - [x] Emit progress messages to the UI log
 - [x] Explicit approval and allow-listed build profiles for selected targets
 - [ ] Process cancellation and timeouts
-- [ ] Host-specific artifact verification and installer/package reporting
+- [x] Discover common package artifacts after successful builds and show their paths, sizes, and output-folder actions
+- [ ] Artifact signing, install testing, and deeper host-specific package verification
 - [ ] Android build runner constraints and device testing
 - [ ] Signed/reproducible releases
 
@@ -79,4 +80,5 @@ A source repository cannot always be turned into an app by one generic command. 
 - The Electron profile currently invokes the repository's `npm run build` script; that script may not create a distributable installer.
 - Tool detection is informational; a tool being present does not guarantee the project is compatible with the selected profile.
 - Build subprocesses currently have no cancel button or enforced execution timeout. Do not use this preview with untrusted projects.
+- Artifact discovery is best-effort and scans common output file types; it does not prove that a package is installable or signed.
 - Android APK creation needs Android SDK/Java/Gradle or Flutter tooling as appropriate. Available targets depend on the tools installed on the desktop host.
