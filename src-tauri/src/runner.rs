@@ -408,8 +408,14 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
     if let Ok(mut active) = state.active.lock() { *active = false; }
     let (exit_code, success, timed_out, cancelled) = outcome;
     if !timed_out && !cancelled {
-        let _ = stdout_task.await;
-        let _ = stderr_task.await;
+        if time::timeout(Duration::from_secs(5), &mut stdout_task).await.is_err() {
+            stdout_task.abort();
+            emit(&app, "warning", "Stopped waiting for stdout pipe closure after 5 seconds.");
+        }
+        if time::timeout(Duration::from_secs(5), &mut stderr_task).await.is_err() {
+            stderr_task.abort();
+            emit(&app, "warning", "Stopped waiting for stderr pipe closure after 5 seconds.");
+        }
     }
     let artifacts = if success { discover_artifacts(&root) } else { Vec::new() };
     let message = if cancelled {
