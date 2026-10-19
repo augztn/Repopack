@@ -263,12 +263,21 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
                 return Err("Python dependency setup requires requirements.txt or pyproject.toml.".into());
             }
         }
-        "python-package" => {
-            let entrypoint = ["main.py", "app.py", "run.py"].iter().copied()
+        "python-package" | "python-desktop-package" => {
+            let entrypoint = ["src/app.py", "main.py", "app.py", "run.py"].iter().copied()
                 .find(|candidate| root.join(candidate).is_file())
-                .ok_or("Could not infer a Python entry point. Add main.py, app.py, or run.py at the project root.")?;
+                .ok_or("Could not infer a Python entry point. Supported locations include src/app.py, main.py, app.py, and run.py.")?;
             let python = if cfg!(windows) { "python" } else { "python3" };
-            (python, vec!["-m", "PyInstaller", "--onefile", "--clean", "--noconfirm", entrypoint], "PyInstaller single-file package")
+            (python, vec!["-m", "PyInstaller", "--onefile", "--clean", "--noconfirm", entrypoint], "PyInstaller desktop package")
+        }
+        "droidlab-appimage" => {
+            if !root.join("scripts/build-linux.sh").is_file() || !root.join("src/app.py").is_file() {
+                return Err("DroidLab AppImage profile requires scripts/build-linux.sh and src/app.py.".into());
+            }
+            if !cfg!(target_os = "linux") {
+                return Err("DroidLab's AppImage profile must run on Linux. Use a Linux build host or choose a supported Windows workflow.".into());
+            }
+            ("bash", vec!["scripts/build-linux.sh"], "DroidLab Linux AppImage packaging script")
         }
         "rust-release" => {
             if !root.join("Cargo.toml").is_file() {
