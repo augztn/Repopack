@@ -2,7 +2,7 @@
 
 Repopack is a local-first repository inspection and build-preparation app. The first milestone accepts a public GitHub repository URL or a local ZIP, downloads/extracts it into the app cache, and detects common project types.
 
-> **Safety note:** project build scripts are executable code. Repopack should show the proposed commands and ask for approval before running them. This first milestone does not execute project build scripts.
+> **Safety note:** repository build scripts are executable code and may be unsafe. Repopack asks for explicit approval before running a small allow-list of build profiles. Only build repositories you trust; approval is not a sandbox.
 
 ## Planned stack
 
@@ -62,11 +62,21 @@ Repopack/
 - [x] Defend ZIP extraction against path traversal, symlinks, oversized archives, and excessive file counts
 - [x] Detect common project markers and show a recommendation
 - [x] Emit progress messages to the UI log
-- [ ] Approved, allow-listed build profiles and cancellation
-- [ ] Host-specific installer/package generation
+- [x] Explicit approval and allow-listed build profiles for selected targets
+- [ ] Process cancellation and timeouts
+- [ ] Host-specific artifact verification and installer/package reporting
 - [ ] Android build runner constraints and device testing
 - [ ] Signed/reproducible releases
 
 ## Important scope distinction
 
 A source repository cannot always be turned into an app by one generic command. The supported output depends on its framework and required toolchain. Native Windows packages are built on Windows, Linux packages on Linux, and Android APKs need Android build tools. Android itself does not provide Node, Python, Flutter, or Android SDK toolchains by default; local build execution on the phone needs a separate, carefully designed strategy.
+
+
+## Current build-runner limitations
+
+- Build profiles do not automatically install dependencies. Review the repository and lockfile before installing dependencies.
+- The Electron profile currently invokes the repository's `npm run build` script; that script may not create a distributable installer.
+- Tool detection is informational; a tool being present does not guarantee the project is compatible with the selected profile.
+- Build subprocesses currently have no cancel button or enforced execution timeout. Do not use this preview with untrusted projects.
+- Android APK creation needs Android SDK/Java/Gradle or Flutter tooling as appropriate. Available targets depend on the tools installed on the desktop host.
