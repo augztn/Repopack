@@ -196,7 +196,7 @@ fn extract_archive(bytes: &[u8], destination: &Path) -> Result<(), String> {
 
     let mut extracted_bytes = 0_u64;
     for index in 0..archive.len() {
-        let mut entry = archive.by_index(index)
+        let entry = archive.by_index(index)
             .map_err(|e| format!("Could not read ZIP entry {index}: {e}"))?;
         let relative = entry.enclosed_name()
             .ok_or_else(|| format!("Unsafe path in ZIP entry {}.", entry.name()))?
@@ -353,6 +353,8 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use uuid::Uuid;
     use super::parse_github_url;
 
     #[test]
