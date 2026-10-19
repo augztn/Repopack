@@ -212,6 +212,21 @@ async fn check_command(command: &str, args: &[&str], tool: &str) -> ToolCheck {
     }
 }
 
+fn executable_available(command: &str) -> bool {
+    let path_value = match std::env::var_os("PATH") { Some(value) => value, None => return false };
+    for dir in std::env::split_paths(&path_value) {
+        let candidate = dir.join(command);
+        if candidate.is_file() { return true; }
+        #[cfg(windows)]
+        {
+            for extension in ["exe", "cmd", "bat"] {
+                if dir.join(format!("{command}.{extension}")).is_file() { return true; }
+            }
+        }
+    }
+    false
+}
+
 #[tauri::command]
 pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolCheck>, String> {
     let root = PathBuf::from(&root_path).canonicalize().map_err(|e| format!("Project workspace is unavailable: {e}"))?;
