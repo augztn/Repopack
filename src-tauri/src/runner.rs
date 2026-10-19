@@ -216,6 +216,10 @@ async fn select_python_command() -> Result<&'static str, String> {
 
 async fn check_command(command: &str, args: &[&str], tool: &str) -> ToolCheck {
     let mut process = Command::new(command);
+    // AppImages can export PYTHONHOME/PYTHONPATH for their bundled runtime.
+    // Never leak those paths into host Python probes, where they can hide the
+    // system standard library (for example, causing "No module named encodings").
+    process.env_remove("PYTHONHOME").env_remove("PYTHONPATH");
     process.args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     match time::timeout(Duration::from_secs(8), process.output()).await {
         Ok(Ok(output)) if output.status.success() => {
@@ -498,6 +502,9 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         // DroidLab's build script invokes wget, tar, PyInstaller, and appimagetool.
         let mut cmd = Command::new("bash");
         cmd.args(&args);
+        // The parent Repopack AppImage may set these for its own bundled Python.
+        // DroidLab must use the host Python installation, not the AppImage runtime.
+        cmd.env_remove("PYTHONHOME").env_remove("PYTHONPATH");
         cmd.env("PYTHON", select_python_command().await.unwrap_or("python3"));
         cmd
     } else {
