@@ -238,7 +238,45 @@ fn extract_archive(bytes: &[u8], destination: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn find_droidlab_project_root(start: &Path) -> Option<PathBuf> {
+    let mut stack: Vec<(PathBuf, usize)> = vec![(start.to_path_buf(), 0)];
+    let mut visited = 0usize;
+    while let Some((directory, depth)) = stack.pop() {
+        if depth > 5 || visited >= 3000 {
+            continue;
+        }
+        visited += 1;
+        if directory.join("scripts/build-linux.sh").is_file()
+            && directory.join("src/app.py").is_file()
+            && directory.join("requirements.txt").is_file()
+        {
+            return Some(directory);
+        }
+        let entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if matches!(name.as_str(), ".git" | "node_modules" | "venv" | ".venv" | "__pycache__" | "dist" | "build" | "target" | ".dart_tool") {
+                continue;
+            }
+            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+    None
+}
+
 fn find_project_root(extracted_dir: &Path) -> PathBuf {
+    // Prefer the exact DroidLab layout over generic wrapper markers such as
+    // requirements.txt or README files at the ZIP extraction root.
+    if let Some(root) = find_droidlab_project_root(extracted_dir) {
+        return root;
+    }
+
     if has_project_marker(extracted_dir) {
         return extracted_dir.to_path_buf();
     }
@@ -429,7 +467,7 @@ pub fn run() {
 mod tests {
     use std::fs;
     use uuid::Uuid;
-    use super::parse_github_url;
+    use super::{find_project_root, parse_github_url};
 
     #[test]
     fn parses_standard_repository_url() {
@@ -454,6 +492,23 @@ mod tests {
     #[test]
     fn rejects_missing_repository_segment() {
         assert!(parse_github_url("https://github.com/owner").is_err());
+    }
+
+    #[test]
+    fn prefers_nested_droidlab_root_over_wrapper_manifest() {
+        let wrapper = std::env::temp_dir().join(format!("repopack-wrapper-{}", Uuid::new_v4()));
+        let project = wrapper.join("DroidLab-main");
+        fs::create_dir_all(project.join("src")).unwrap();
+        fs::create_dir_all(project.join("scripts")).unwrap();
+        fs::write(wrapper.join("requirements.txt"), "wrapper-marker").unwrap();
+        fs::write(project.join("requirements.txt"), "tkinterdnd2").unwrap();
+        fs::write(project.join("src/app.py"), "print('gui')").unwrap();
+        fs::write(project.join("scripts/build-linux.sh"), "#!/usr/bin/env bash").unwrap();
+
+        let selected = find_project_root(&wrapper);
+        assert_eq!(selected, project);
+
+        fs::remove_dir_all(wrapper).unwrap();
     }
 
     #[test]
