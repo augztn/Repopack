@@ -280,14 +280,37 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         }
         *slot = Some(cancel_tx);
     }
-    let outcome = tokio::select! {
-        waited = time::timeout(Duration::from_secs(1800), child.wait()) => match waited {
-            Ok(Ok(status)) => (status.code(), status.success(), false, false),
-            Ok(Err(error)) => {
-                let _ = child.kill().await;
-                stdout_task.abort();
-                stderr_task.abort();
-                if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
+    let wait_outcome = tokio::select! {
+        waited = time::timeout(Duration::from_secs(1800), child.wait()) => Some(waited),
+        _ = cancel_rx => None,
+    };
+    let outcome = match wait_outcome {
+        Some(Ok(Ok(status))) => (status.code(), status.success(), false, false),
+        Some(Ok(Err(error))) => {
+            let _ = child.kill().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
+            return Err(format!("Could not wait for build process: {error}"));
+        }
+        Some(Err(_)) => {
+            emit(&app, "warning", "Build exceeded the 30-minute limit; terminating the main build process.");
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            (None, false, true, false)
+        }
+        None => {
+            emit(&app, "warning", "Build cancellation requested; terminating the main build process.");
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            (None, false, false, true)
+        }
+    };
+    if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
                 return Err(format!("Could not wait for build process: {error}"));
             }
             Err(_) => {
