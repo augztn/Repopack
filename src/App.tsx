@@ -98,7 +98,7 @@ export default function App() {
       const prepared = await invoke<SourceInfo>("prepare_source", { input });
       setResult(prepared);
       setBuildResult(null);
-      setBuildProfile(prepared.projectType === "tauri" ? "tauri-build" : prepared.projectType === "electron" ? "electron-build" : prepared.projectType === "flutter" ? "flutter-apk" : prepared.projectType === "android-gradle" ? "android-debug-apk" : "node-build");
+      setBuildProfile(prepared.projectType === "tauri" ? "tauri-build" : prepared.projectType === "electron" ? "electron-build" : prepared.projectType === "flutter" ? "flutter-apk" : prepared.projectType === "android-gradle" ? "android-debug-apk" : prepared.projectType === "rust" ? "rust-release" : "node-build");
       setPhase("Inspection complete");
       setLogs((current) => [
         ...current,
@@ -132,6 +132,7 @@ export default function App() {
       "tauri-build": "npm run tauri build",
       "npm-install": "npm ci / npm install (dependency setup)",
       "node-build": "npm run build",
+      "rust-release": "cargo build --release",
       "electron-build": "npm run build (Electron project)",
       "flutter-windows": "flutter build windows",
       "flutter-linux": "flutter build linux",
@@ -247,6 +248,7 @@ export default function App() {
                 <option value="npm-install">Prepare Node dependencies (npm ci/install)</option>
                 <option value="tauri-build">Tauri desktop package</option>
                 <option value="node-build">Node / web build</option>
+                <option value="rust-release">Rust — release executable</option>
                 <option value="electron-build">Electron project build script</option>
                 <option value="flutter-windows">Flutter — Windows</option>
                 <option value="flutter-linux">Flutter — Linux</option>
