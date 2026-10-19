@@ -22,6 +22,7 @@ struct SourceInfo {
     name: String,
     root_path: String,
     project_type: String,
+    recommended_profile: String,
     indicators: Vec<String>,
     next_step: String,
 }
@@ -134,13 +135,24 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
 
     let root = find_project_root(&extracted_dir);
     let (project_type, indicators, next_step) = detect_project(&root);
-    log(&app, "success", format!("Detected project type: {project_type}."));
+    let recommended_profile = match project_type.as_str() {
+        "tauri" => "tauri-build",
+        "electron" if package_has_script(&root, "dist") || package_has_script(&root, "make") || package_has_script(&root, "package") => "electron-package",
+        "electron" => "electron-build",
+        "flutter" => "flutter-apk",
+        "android-gradle" => "android-debug-apk",
+        "rust" => "rust-release",
+        "python" => "python-package",
+        _ => "node-build",
+    }.to_string();
+    log(&app, "success", format!("Detected project type: {project_type}; recommended profile: {recommended_profile}."));
     log(&app, "info", "No package scripts or build commands have been executed.");
 
     Ok(SourceInfo {
         name: display_name,
         root_path: root.to_string_lossy().into_owned(),
         project_type,
+        recommended_profile,
         indicators,
         next_step,
     })
