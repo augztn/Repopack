@@ -47,8 +47,25 @@ export default function App() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
+    const persist = (level: string, message: string) => {
+      void invoke("write_diagnostic_log", { level, message }).catch(() => undefined);
+    };
+    persist("system", "Frontend initialized; persistent diagnostics enabled.");
+    const onWindowError = (event: ErrorEvent) => {
+      const message = `window error: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`;
+      persist("crash", message);
+      setLogs((current) => [...current.slice(-499), `[crash] ${message}`]);
+    };
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const message = `unhandled promise rejection: ${String(event.reason)}`;
+      persist("crash", message);
+      setLogs((current) => [...current.slice(-499), `[crash] ${message}`]);
+    };
+    window.addEventListener("error", onWindowError);
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
     listen<LogEvent>("job-log", (event) => {
       const entry = `[${event.payload.level}] ${event.payload.message}`;
+      persist(event.payload.level, event.payload.message);
       setLogs((current) => [...current.slice(-499), entry]);
     }).then((stop) => {
       if (disposed) stop();
@@ -59,6 +76,8 @@ export default function App() {
     return () => {
       disposed = true;
       unlisten?.();
+      window.removeEventListener("error", onWindowError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
     };
   }, []);
 
@@ -283,7 +302,7 @@ export default function App() {
           </section>}
 
           <section className="console-section">
-            <div className="console-header"><div><span className="console-leds"><i /><i /><i /></span><strong>Process output</strong><span className="console-tag">LIVE LOG</span></div><button type="button" className="clear-button" onClick={() => setLogs([])}>Clear logs</button></div>
+            <div className="console-header"><div><span className="console-leds"><i /><i /><i /></span><strong>Process output</strong><span className="console-tag">LIVE LOG</span></div><div className="artifact-actions"><button type="button" className="button button-secondary" onClick={async () => { try { const destination = await save({ defaultPath: "repopack-diagnostics.zip", title: "Export diagnostic ZIP", filters: [{ name: "ZIP archive", extensions: ["zip"] }] }); if (!destination) return; await invoke("export_diagnostic_logs", { destinationPath: destination }); setLogs((current) => [...current, `[success] Diagnostic ZIP saved to ${destination}`]); } catch (error) { setLogs((current) => [...current, `[error] Diagnostic ZIP export failed: ${String(error)}`]); } }}>Export logs ZIP</button><button type="button" className="button button-secondary" onClick={async () => { try { const destination = await save({ defaultPath: "repopack.log", title: "Save diagnostic log", filters: [{ name: "Log text", extensions: ["log", "txt"] }] }); if (!destination) return; await invoke("export_diagnostic_text", { destinationPath: destination }); setLogs((current) => [...current, `[success] Diagnostic log saved to ${destination}`]); } catch (error) { setLogs((current) => [...current, `[error] Log export failed: ${String(error)}`]); } }}>Save log</button><button type="button" className="clear-button" onClick={() => setLogs([])}>Clear logs</button></div></div>
             <div className="terminal">
               <div className="terminal-meta"><span>REPOPACK / JOB CONSOLE</span><span>{logs.length.toString().padStart(3, "0")} ENTRIES</span></div>
               <div className="terminal-lines">{logs.map((line, index) => <div className="terminal-line" key={`${index}-${line}`}><span className="line-no">{String(index + 1).padStart(2, "0")}</span><code>{line}</code></div>)}<div className="terminal-cursor"><span className="line-no">›</span><span className="cursor-block" /></div><div ref={logEnd} /></div>
