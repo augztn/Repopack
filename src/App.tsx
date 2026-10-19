@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 type LogEvent = { level: string; message: string };
 type ToolCheck = { tool: string; available: boolean; version?: string; message: string };
@@ -130,6 +130,7 @@ export default function App() {
     if (!result) return;
     const labels: Record<string, string> = {
       "tauri-build": "npm run tauri build",
+      "npm-install": "npm ci / npm install (dependency setup)",
       "node-build": "npm run build",
       "electron-build": "npm run build (Electron project)",
       "flutter-windows": "flutter build windows",
@@ -138,7 +139,8 @@ export default function App() {
       "android-debug-apk": "Gradle assembleDebug",
     };
     const command = labels[buildProfile] ?? buildProfile;
-    if (!window.confirm(`Run ${command} in this project? Build scripts can execute arbitrary code. Continue only if you trust this repository.`)) return;
+    const riskText = buildProfile === "npm-install" ? "Dependency installation may execute package lifecycle scripts and download code." : "Build scripts can execute arbitrary code.";
+    if (!window.confirm(`Run ${command} in this project? ${riskText} Continue only if you trust this repository.`)) return;
     setBuilding(true);
     setBuildResult(null);
     setPhase("Build running");
@@ -242,6 +244,7 @@ export default function App() {
             <div className="build-action-row">
               <label className="build-profile-label" htmlFor="build-profile">BUILD PROFILE</label>
               <select id="build-profile" value={buildProfile} onChange={(event) => { setBuildProfile(event.target.value); setBuildResult(null); }} disabled={building}>
+                <option value="npm-install">Prepare Node dependencies (npm ci/install)</option>
                 <option value="tauri-build">Tauri desktop package</option>
                 <option value="node-build">Node / web build</option>
                 <option value="electron-build">Electron project build script</option>
@@ -259,10 +262,13 @@ export default function App() {
               {buildResult.artifacts.map((artifact) => <div className="artifact-row" key={artifact.path}>
                 <div className="artifact-file-icon">{artifact.kind}</div>
                 <div className="artifact-meta"><strong>{artifact.name}</strong><small>{artifact.path}</small><small>{artifact.sizeBytes < 1024 * 1024 ? `${(artifact.sizeBytes / 1024).toFixed(1)} KB` : `${(artifact.sizeBytes / (1024 * 1024)).toFixed(2)} MB`}</small></div>
-                <button type="button" className="button button-secondary" onClick={async () => {
+                <div className="artifact-actions"><button type="button" className="button button-secondary" onClick={async () => {
                   try { await invoke("open_artifact_folder", { artifactPath: artifact.path }); }
                   catch (error) { setLogs((current) => [...current, `[error] Could not open artifact folder: ${String(error)}`]); }
-                }}>Open folder ↗</button>
+                }}>Open folder ↗</button><button type="button" className="button button-secondary" onClick={async () => {
+                  try { const destination = await save({ defaultPath: artifact.name, title: "Export build artifact" }); if (!destination) return; await invoke("export_artifact", { artifactPath: artifact.path, destinationPath: destination }); setLogs((current) => [...current, `[success] Exported artifact to ${destination}`]); }
+                  catch (error) { setLogs((current) => [...current, `[error] Artifact export failed: ${String(error)}`]); }
+                }}>Export file ↓</button></div>
               </div>)}
             </div>}
           </section>}
