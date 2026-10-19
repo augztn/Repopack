@@ -120,6 +120,9 @@ export default function App() {
       setBuildResult(null);
       setBuildProfile(prepared.recommendedProfile);
       setPhase("Inspection complete");
+      setToolChecks(null);
+      // Automatically inspect the local toolchain as soon as the project type is known.
+      void checkTools();
       setLogs((current) => [
         ...current,
         `[success] Project detected: ${prepared.projectType}`,
@@ -264,9 +267,9 @@ export default function App() {
 
           {result && <section className="result-card panel build-controls">
             <div className="result-heading"><div><div className="eyebrow">LOCAL TOOLCHAIN</div><h2>Build this project</h2></div><button type="button" className="button button-secondary" onClick={checkTools} disabled={checkingTools}>{checkingTools ? "Checking…" : "Check tools"}</button></div>
-            <p className="result-path">Builds run locally in the inspected workspace. Review the profile and approve execution explicitly.</p>
+            <p className="result-path">Auto-detected profile: <strong>{buildProfile}</strong>. Repopack checks available build tools automatically; review the recommendation and approve execution explicitly.</p>
             <div className="build-action-row">
-              <label className="build-profile-label" htmlFor="build-profile">BUILD PROFILE</label>
+              <label className="build-profile-label" htmlFor="build-profile">AUTO-DETECTED BUILD PROFILE</label>
               <select id="build-profile" value={buildProfile} onChange={(event) => { setBuildProfile(event.target.value); setBuildResult(null); }} disabled={building}>
                 <option value="npm-install">Prepare Node dependencies (npm ci/install)</option>
                 <option value="tauri-build">Tauri desktop package</option>
@@ -283,7 +286,7 @@ export default function App() {
               </select>
               <div className="build-action-buttons"><button type="button" className="button button-primary" onClick={runBuild} disabled={building}>{building ? <><span className="spinner" /> Building…</> : <>Approve &amp; build <span>→</span></>}</button>{building && <button type="button" className="button button-secondary" onClick={async () => { try { await invoke("cancel_build"); setLogs((current) => [...current, "[warning] Cancellation requested."]); } catch (error) { setLogs((current) => [...current, `[error] Could not cancel build: ${String(error)}`]); } }}>Cancel build</button>}</div>
             </div>
-            {toolChecks && <div className="tool-check-grid">{toolChecks.map((tool) => <div className={`tool-check ${tool.available ? "available" : "missing"}`} key={tool.tool}><span>{tool.available ? "✓" : "×"}</span><div><strong>{tool.tool}</strong><small>{tool.version ?? tool.message}</small></div></div>)}</div>}
+            {checkingTools && <p className="result-path">Detecting installed build tools and versions…</p>}{toolChecks && <><div className="recommendation"><span>✓</span><div><strong>Toolchain scan complete</strong><p>{toolChecks.filter((tool) => tool.available).length} of {toolChecks.length} detected tools are available. Missing tools are shown below; a profile may require tools beyond those listed.</p></div></div><div className="tool-check-grid">{toolChecks.map((tool) => <div className={`tool-check ${tool.available ? "available" : "missing"}`} key={tool.tool}><span>{tool.available ? "✓" : "×"}</span><div><strong>{tool.tool}</strong><small>{tool.version ?? tool.message}</small></div></div>)}</div></>}
             {buildResult && <div className={`build-result ${buildResult.success ? "available" : "missing"}`}><strong>{buildResult.success ? "Build completed" : "Build failed"}</strong><p>{buildResult.message}</p></div>}
             {buildResult && buildResult.artifacts.length > 0 && <div className="artifact-panel">
               <div className="artifact-heading"><strong>Detected output artifacts</strong><span>{buildResult.artifacts.length} FILE{buildResult.artifacts.length === 1 ? "" : "S"}</span></div>
