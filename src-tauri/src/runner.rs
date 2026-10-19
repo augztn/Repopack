@@ -222,17 +222,14 @@ pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolChec
     if !is_droidlab { return Ok(checks); }
 
     let python = if cfg!(windows) { "python" } else { "python3" };
-    let (tkinter, pyinstaller, appimagetool, wget, tar, xz, bash) = tokio::join!(
-        check_command(python, &["-c", "import tkinter; print('Tkinter import OK')"], "Tkinter"),
-        check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller"),
-        check_command("appimagetool", &["--version"], "appimagetool"),
-        check_command("wget", &["--version"], "wget"),
-        check_command("tar", &["--version"], "tar"),
-        check_command("xz", &["--version"], "xz"),
-        check_command("bash", &["--version"], "Bash"),
-    );
     let mut all = checks;
-    all.extend([tkinter, pyinstaller, appimagetool, wget, tar, xz, bash]);
+    all.push(check_command(python, &["-c", "import tkinter; print('Tkinter import OK')"], "Tkinter").await);
+    all.push(check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller").await);
+    all.push(check_command("appimagetool", &["--version"], "appimagetool").await);
+    all.push(check_command("wget", &["--version"], "wget").await);
+    all.push(check_command("tar", &["--version"], "tar").await);
+    all.push(check_command("xz", &["--version"], "xz").await);
+    all.push(check_command("bash", &["--version"], "Bash").await);
     Ok(all)
 }
 
