@@ -253,11 +253,49 @@ fn find_project_root(extracted_dir: &Path) -> PathBuf {
         Err(_) => Vec::new(),
     };
 
+    // GitHub source ZIPs usually contain one outer folder, but project markers can
+    // be nested deeper in an exported archive. Walk only a bounded depth, skip
+    // dependency/build folders, and prefer a directory with stronger project markers.
     if children.len() == 1 && has_project_marker(&children[0]) {
-        children[0].clone()
-    } else {
-        extracted_dir.to_path_buf()
+        return children[0].clone();
     }
+    let mut stack: Vec<(PathBuf, usize)> = vec![(extracted_dir.to_path_buf(), 0)];
+    let mut best: Option<(u32, PathBuf)> = None;
+    let mut visited = 0usize;
+    while let Some((directory, depth)) = stack.pop() {
+        if depth > 5 || visited > 3000 { continue; }
+        visited += 1;
+        let score = project_root_score(&directory);
+        if score > best.as_ref().map(|(value, _)| *value).unwrap_or(0) {
+            best = Some((score, directory.clone()));
+        }
+        let entries = match fs::read_dir(&directory) { Ok(entries) => entries, Err(_) => continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if matches!(name.as_str(), ".git" | "node_modules" | "venv" | ".venv" | "__pycache__" | "dist" | "build" | "target" | ".dart_tool") {
+                continue;
+            }
+            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+    best.filter(|(score, _)| *score > 0).map(|(_, path)| path).unwrap_or_else(|| extracted_dir.to_path_buf())
+}
+
+fn project_root_score(root: &Path) -> u32 {
+    let mut score = 0;
+    if root.join("scripts/build-linux.sh").is_file() && root.join("src/app.py").is_file() { score += 100; }
+    if root.join("src/app.py").is_file() { score += 35; }
+    if root.join("requirements.txt").is_file() { score += 25; }
+    if root.join("pyproject.toml").is_file() { score += 25; }
+    if root.join("package.json").is_file() { score += 25; }
+    if root.join("src-tauri/tauri.conf.json").is_file() { score += 50; }
+    if root.join("pubspec.yaml").is_file() { score += 40; }
+    if root.join("gradlew").is_file() || root.join("gradlew.bat").is_file() { score += 40; }
+    if root.join("Cargo.toml").is_file() { score += 20; }
+    score
 }
 
 fn has_project_marker(root: &Path) -> bool {
