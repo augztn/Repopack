@@ -11,6 +11,7 @@ type SourceInfo = {
   name: string;
   rootPath: string;
   projectType: string;
+  recommendedProfile: string;
   indicators: string[];
   nextStep: string;
 };
@@ -98,7 +99,7 @@ export default function App() {
       const prepared = await invoke<SourceInfo>("prepare_source", { input });
       setResult(prepared);
       setBuildResult(null);
-      setBuildProfile(prepared.projectType === "tauri" ? "tauri-build" : prepared.projectType === "electron" ? "electron-build" : prepared.projectType === "flutter" ? "flutter-apk" : prepared.projectType === "android-gradle" ? "android-debug-apk" : prepared.projectType === "rust" ? "rust-release" : prepared.projectType === "python" ? "python-package" : "node-build");
+      setBuildProfile(prepared.recommendedProfile);
       setPhase("Inspection complete");
       setLogs((current) => [
         ...current,
