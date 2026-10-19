@@ -168,7 +168,17 @@ pub async fn check_build_tools() -> Vec<ToolCheck> {
 #[tauri::command]
 pub async fn run_approved_build(app: AppHandle, root_path: String, profile: String) -> Result<BuildResult, String> {
     let root = approved_workspace(&app, &root_path)?;
-    let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {\n        "npm-install" => {\n            if !root.join("package.json").is_file() {\n                return Err("Dependency preparation requires package.json in the project root.".into());\n            }\n            if root.join("package-lock.json").is_file() || root.join("npm-shrinkwrap.json").is_file() {\n                ("npm", vec!["ci", "--no-audit", "--no-fund"], "npm ci (dependency preparation)")\n            } else {\n                ("npm", vec!["install", "--no-audit", "--no-fund"], "npm install (dependency preparation)")\n            }\n        }
+    let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {
+        "npm-install" => {
+            if !root.join("package.json").is_file() {
+                return Err("Dependency preparation requires package.json in the project root.".into());
+            }
+            if root.join("package-lock.json").is_file() || root.join("npm-shrinkwrap.json").is_file() {
+                ("npm", vec!["ci", "--no-audit", "--no-fund"], "npm ci (dependency preparation)")
+            } else {
+                ("npm", vec!["install", "--no-audit", "--no-fund"], "npm install (dependency preparation)")
+            }
+        }
         "tauri-build" => {
             if !root.join("src-tauri/tauri.conf.json").is_file() || !root.join("package.json").is_file() {
                 return Err("Tauri build requires package.json and src-tauri/tauri.conf.json in the project root.".into());
@@ -248,15 +258,34 @@ pub async fn run_approved_build(app: AppHandle, root_path: String, profile: Stri
         }
     });
 
-    let status = child.wait().await.map_err(|e| format!("Could not wait for build process: {e}"))?;
-    let _ = stdout_task.await;
-    let _ = stderr_task.await;
-    let success = status.success();
+    let (exit_code, success, timed_out) = match time::timeout(Duration::from_secs(1800), child.wait()).await {
+        Ok(Ok(status)) => (status.code(), status.success(), false),
+        Ok(Err(error)) => {
+            let _ = child.kill().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            return Err(format!("Could not wait for build process: {error}"));
+        }
+        Err(_) => {
+            emit(&app, "warning", "Build exceeded the 30-minute limit; terminating the main build process.");
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            (None, false, true)
+        }
+    };
+    if !timed_out {
+        let _ = stdout_task.await;
+        let _ = stderr_task.await;
+    }
     let artifacts = if success { discover_artifacts(&root) } else { Vec::new() };
-    let message = if success {
+    let message = if timed_out {
+        format!("{label} timed out after 30 minutes. The main process was terminated; review logs for child-process cleanup.")
+    } else if success {
         if artifacts.is_empty() { format!("{label} completed successfully, but no recognized output artifact was found.") }
         else { format!("{label} completed successfully; found {} artifact(s).", artifacts.len()) }
-    } else { format!("{label} failed with exit code {:?}.", status.code()) };
+    } else { format!("{label} failed with exit code {:?}.", exit_code) };
     emit(&app, if success { "success" } else { "error" }, &message);
     if success && artifacts.is_empty() {
         emit(&app, "warning", "Build exited successfully, but no recognized installer/package was found. A successful process does not guarantee an installable artifact.");
