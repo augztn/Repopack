@@ -97,3 +97,9 @@ The `Cross-platform test bundle` workflow builds Repopack natively on Windows, m
 To download it, open the repository's **Actions** tab, select **Cross-platform test bundle**, open a successful run, and download the `Repopack-cross-platform-test-bundle` artifact. The ZIP contains a folder for each desktop platform plus testing instructions. GitHub keeps these test artifacts for 14 days.
 
 These are unsigned test builds; they are separate native packages, not one executable that runs on every OS. The workflow also attempts an Android APK build using Tauri's Android project initialization and Android SDK/NDK toolchain. Check the workflow run logs to confirm that the first Android build succeeds.
+
+## Diagnostics and crash investigation
+
+Repopack writes persistent diagnostic messages to its app data directory under `diagnostics/repopack.log`. The Process output panel includes **Save log** for a custom text/log destination and **Export logs ZIP** for a shareable diagnostic bundle. The log records frontend JavaScript errors, unhandled promise rejections, job events, and whether the previous app session appears to have ended unexpectedly.
+
+If the app fails before its UI opens, it cannot display its export controls. Start it again to record an unclean previous session, or collect platform-level logs (for example, Android `adb logcat`) and attach those to your issue. Review diagnostic files before sharing: messages can include local paths and error details. The ZIP does not automatically include source ZIPs or arbitrary personal files.
