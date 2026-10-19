@@ -346,14 +346,14 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let app_out = app.clone();
-    let stdout_task = tokio::spawn(async move {
+    let mut stdout_task = tokio::spawn(async move {
         if let Some(stream) = stdout {
             let mut lines = BufReader::new(stream).lines();
             while let Ok(Some(line)) = lines.next_line().await { emit(&app_out, "stdout", line); }
         }
     });
     let app_err = app.clone();
-    let stderr_task = tokio::spawn(async move {
+    let mut stderr_task = tokio::spawn(async move {
         if let Some(stream) = stderr {
             let mut lines = BufReader::new(stream).lines();
             while let Ok(Some(line)) = lines.next_line().await { emit(&app_err, "stderr", line); }
