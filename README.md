@@ -63,7 +63,7 @@ Repopack/
 - [x] Detect common project markers and show a recommendation
 - [x] Emit progress messages to the UI log
 - [x] Explicit approval and allow-listed build profiles for selected targets
-- [ ] Process cancellation and timeouts
+- [ ] Process cancellation (main-process timeout is implemented, but descendant-process cleanup needs platform-specific handling)
 - [x] Discover common package artifacts after successful builds and show their paths, sizes, and output-folder actions
 - [ ] Artifact signing, install testing, and deeper host-specific package verification
 - [ ] Android build runner constraints and device testing
@@ -76,9 +76,14 @@ A source repository cannot always be turned into an app by one generic command. 
 
 ## Current build-runner limitations
 
-- Build profiles do not automatically install dependencies. Review the repository and lockfile before installing dependencies.
+- The `npm-install` profile uses `npm ci` when a package lock exists, otherwise `npm install`; dependency lifecycle scripts may execute arbitrary code, so review the repository before approving.
 - The Electron profile currently invokes the repository's `npm run build` script; that script may not create a distributable installer.
 - Tool detection is informational; a tool being present does not guarantee the project is compatible with the selected profile.
-- Build subprocesses currently have no cancel button or enforced execution timeout. Do not use this preview with untrusted projects.
-- Artifact discovery is best-effort and scans common output file types; it does not prove that a package is installable or signed.
+- Build subprocesses have a 30-minute main-process timeout, but this is not a complete sandbox and does not guarantee every descendant process is terminated. Do not use this preview with untrusted projects.
+- Artifact discovery is best-effort and scans common output file types; it does not prove that a package is installable or signed. Artifacts can be exported through the native save dialog.
 - Android APK creation needs Android SDK/Java/Gradle or Flutter tooling as appropriate. Available targets depend on the tools installed on the desktop host.
+
+
+## Dependency preparation and export
+
+The `Prepare Node dependencies` profile requires explicit approval and uses `npm ci` when a lockfile is present, or `npm install` otherwise. Both may run lifecycle scripts and download code. Build execution has a 30-minute timeout for the main process; this is not a security sandbox and descendant processes may need platform-specific cleanup. Recognized artifacts can be exported through the native save dialog or viewed in their output folder.
