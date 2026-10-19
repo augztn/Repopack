@@ -63,8 +63,8 @@ Repopack/
 - [x] Detect common project markers and show a recommendation
 - [x] Emit progress messages to the UI log
 - [x] Explicit approval and allow-listed build profiles for selected targets
-- [ ] Process cancellation (main-process timeout is implemented, but descendant-process cleanup needs platform-specific handling)
-- [x] Discover common package artifacts after successful builds and show their paths, sizes, and output-folder actions
+- [x] Build cancellation button and a 30-minute main-process timeout (descendant-process cleanup remains platform-dependent)
+- [x] Discover common package artifacts after successful builds, show their paths and sizes, open output folders, and export artifacts
 - [ ] Artifact signing, install testing, and deeper host-specific package verification
 - [ ] Android build runner constraints and device testing
 - [ ] Signed/reproducible releases
@@ -76,7 +76,7 @@ A source repository cannot always be turned into an app by one generic command. 
 
 ## Current build-runner limitations
 
-- The `npm-install` profile uses `npm ci` when a package lock exists, otherwise `npm install`; dependency lifecycle scripts may execute arbitrary code, so review the repository before approving.
+- The `npm-install` profile uses `npm ci` when a package lock exists, otherwise `npm install`; dependency lifecycle scripts may execute arbitrary code, so review the repository before approving. The UI also exposes build cancellation and a 30-minute timeout for the main process, but subprocess trees are not yet fully sandboxed or guaranteed to terminate.
 - The Electron profile currently invokes the repository's `npm run build` script; that script may not create a distributable installer.
 - Tool detection is informational; a tool being present does not guarantee the project is compatible with the selected profile.
 - Build subprocesses have a 30-minute main-process timeout, but this is not a complete sandbox and does not guarantee every descendant process is terminated. Do not use this preview with untrusted projects.
