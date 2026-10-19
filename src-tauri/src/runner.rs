@@ -341,19 +341,21 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             }
         }
         let python = if cfg!(windows) { "python" } else { "python3" };
-        let tkinter = OsCommand::new(python).args(["-c", "import tkinter"]).stdout(Stdio::null()).stderr(Stdio::null()).status()
-            .map(|status| status.success()).unwrap_or(false);
-        if !tkinter {
-            return Err("Tkinter is missing from the active Python installation. On Ubuntu/Debian, install python3-tk.".into());
+        let tkinter = check_command(python, &["-c", "import tkinter"], "Tkinter").await;
+        if !tkinter.available {
+            return Err(format!("Tkinter is missing from the active Python installation. On Ubuntu/Debian, install it with: sudo apt install python3-tk. Details: {}", tkinter.message));
         }
-        let pyinstaller = OsCommand::new(python).args(["-m", "PyInstaller", "--version"]).stdout(Stdio::null()).stderr(Stdio::null()).status()
-            .map(|status| status.success()).unwrap_or(false);
-        if !pyinstaller {
-            return Err("PyInstaller is not installed for the active Python interpreter. Install it in the environment used by Repopack.".into());
+        let tkinterdnd = check_command(python, &["-c", "import tkinterdnd2"], "TkinterDnD").await;
+        if !tkinterdnd.available {
+            return Err(format!("TkinterDnD is required by DroidLab but is missing from this Python environment. Install it with: python3 -m pip install tkinterdnd2. Details: {}", tkinterdnd.message));
         }
-        let appimagetool = OsCommand::new("appimagetool").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status();
-        if !matches!(appimagetool, Ok(status) if status.success()) {
-            return Err("appimagetool is missing or failed to run. Install appimagetool or follow DroidLab's Linux build instructions before building.".into());
+        let pyinstaller = check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller").await;
+        if !pyinstaller.available {
+            return Err(format!("PyInstaller is not installed for the active Python interpreter. Install it with: {} -m pip install pyinstaller. Details: {}", python, pyinstaller.message));
+        }
+        let appimagetool = check_command("appimagetool", &["--version"], "appimagetool").await;
+        if !appimagetool.available {
+            return Err("appimagetool is missing or failed its version check. Install the AppImageKit appimagetool for Linux and ensure it is executable and on PATH; see https://github.com/AppImage/AppImageKit/releases.".into());
         }
     }
     let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {
