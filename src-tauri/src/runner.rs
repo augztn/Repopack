@@ -6,7 +6,7 @@ use tokio::{io::{AsyncBufReadExt, BufReader}, process::Command, sync::oneshot, t
 struct RunnerLog { level: String, message: String }
 
 #[derive(Default)]
-pub struct BuildJobState { cancellation: Mutex<Option<oneshot::Sender<()>>> }
+pub struct BuildJobState { cancellation: Mutex<Option<oneshot::Sender<()>>>, active: Mutex<bool> }
 
 #[tauri::command]
 pub fn cancel_build(app: AppHandle, state: tauri::State<'_, BuildJobState>) -> Result<(), String> {
@@ -270,14 +270,17 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         }
     });
 
+    let already_running = {
+        let mut active = state.active.lock().map_err(|_| "Build state is unavailable.")?;
+        if *active { true } else { *active = true; false }
+    };
+    if already_running {
+        let _ = child.kill().await;
+        return Err("Another build is already running.".into());
+    }
     let (cancel_tx, cancel_rx) = oneshot::channel();
     {
         let mut slot = state.cancellation.lock().map_err(|_| "Build state is unavailable.")?;
-        if slot.is_some() {
-            drop(slot);
-            let _ = child.kill().await;
-            return Err("Another build is already running.".into());
-        }
         *slot = Some(cancel_tx);
     }
     let wait_outcome = tokio::select! {
@@ -291,6 +294,7 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             stdout_task.abort();
             stderr_task.abort();
             if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
+            if let Ok(mut active) = state.active.lock() { *active = false; }
             return Err(format!("Could not wait for build process: {error}"));
         }
         Some(Err(_)) => {
@@ -311,6 +315,7 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         }
     };
     if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
+    if let Ok(mut active) = state.active.lock() { *active = false; }
     let (exit_code, success, timed_out, cancelled) = outcome;
     if !timed_out && !cancelled {
         let _ = stdout_task.await;
