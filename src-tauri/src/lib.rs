@@ -301,7 +301,7 @@ fn project_root_score(root: &Path) -> u32 {
 fn has_project_marker(root: &Path) -> bool {
     [
         "package.json", "pubspec.yaml", "pyproject.toml", "requirements.txt",
-        "Cargo.toml", "index.html", "gradlew", "settings.gradle",
+        "Cargo.toml", "index.html", "gradlew", "settings.gradle", "src/app.py", "main.py", "app.py",
         "settings.gradle.kts", "build.gradle", "build.gradle.kts",
         "src-tauri/tauri.conf.json",
     ].iter().any(|name| root.join(name).is_file())
