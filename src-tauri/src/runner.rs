@@ -217,19 +217,28 @@ pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolChec
     let root = PathBuf::from(&root_path).canonicalize().map_err(|e| format!("Project workspace is unavailable: {e}"))?;
     if !root.is_dir() { return Err("Project root is not a directory.".into()); }
 
-    let is_droidlab = root.join("scripts/build-linux.sh").is_file() && root.join("src/app.py").is_file();
     let checks = check_build_tools().await;
+    let is_droidlab = root.join("scripts/build-linux.sh").is_file() && root.join("src/app.py").is_file();
     if !is_droidlab { return Ok(checks); }
 
-    let python = if cfg!(windows) { "python" } else { "python3" };
     let mut all = checks;
-    all.push(check_command(python, &["-c", "import tkinter; print('Tkinter import OK')"], "Tkinter").await);
-    all.push(check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller").await);
-    all.push(check_command("appimagetool", &["--version"], "appimagetool").await);
-    all.push(check_command("wget", &["--version"], "wget").await);
-    all.push(check_command("tar", &["--version"], "tar").await);
-    all.push(check_command("xz", &["--version"], "xz").await);
-    all.push(check_command("bash", &["--version"], "Bash").await);
+    if cfg!(target_os = "linux") {
+        let python = "python3";
+        all.push(check_command(python, &["-c", "import tkinter; print('Tkinter import OK')"], "Tkinter").await);
+        all.push(check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller").await);
+        all.push(check_command("appimagetool", &["--version"], "appimagetool").await);
+        all.push(check_command("wget", &["--version"], "wget").await);
+        all.push(check_command("tar", &["--version"], "tar").await);
+        all.push(check_command("xz", &["--version"], "xz").await);
+        all.push(check_command("bash", &["--version"], "Bash").await);
+    } else {
+        all.push(ToolCheck {
+            tool: "DroidLab AppImage target".into(),
+            available: false,
+            version: None,
+            message: "AppImage packaging requires a Linux build host; this host cannot create a Linux AppImage.".into(),
+        });
+    }
     Ok(all)
 }
 
