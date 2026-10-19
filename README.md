@@ -103,3 +103,8 @@ These are unsigned test builds; they are separate native packages, not one execu
 Repopack writes persistent diagnostic messages to its app data directory under `diagnostics/repopack.log`. The Process output panel includes **Save log** for a custom text/log destination and **Export logs ZIP** for a shareable diagnostic bundle. The log records frontend JavaScript errors, unhandled promise rejections, job events, and whether the previous app session appears to have ended unexpectedly.
 
 If the app fails before its UI opens, it cannot display its export controls. Start it again to record an unclean previous session, or collect platform-level logs (for example, Android `adb logcat`) and attach those to your issue. Review diagnostic files before sharing: messages can include local paths and error details. The ZIP does not automatically include source ZIPs or arbitrary personal files.
+
+
+## Automatic build profile and tool detection
+
+After source inspection, Repopack selects the profile suggested by detected project markers and automatically scans the local machine for relevant toolchains (Node.js/npm, Python, Cargo, Flutter, Java, Gradle, ADB, Android SDK Manager, and Android SDK). The build panel shows which tools are available and lists expected tools for the selected profile. You can still change the suggested profile manually. Builds are not launched automatically: review the profile and explicitly approve execution because repository scripts may run arbitrary code.
