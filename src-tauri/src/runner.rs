@@ -193,6 +193,27 @@ fn check_android_sdk() -> ToolCheck {
     }
 }
 
+fn command_error_excerpt(output: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined = if stderr.trim().is_empty() { stdout } else { stderr };
+    let excerpt = combined.lines().filter(|line| !line.trim().is_empty()).take(4).collect::<Vec<_>>().join(" | ");
+    let excerpt = excerpt.trim();
+    if excerpt.is_empty() { "Command returned a non-zero exit code".into() }
+    else if excerpt.len() > 500 { format!("{}…", &excerpt[..excerpt.floor_char_boundary(500)]) }
+    else { excerpt.to_string() }
+}
+
+async fn select_python_command() -> Result<&'static str, String> {
+    for candidate in ["python", "python3"] {
+        let probe = check_command(candidate, &["-c", "import sys; print(sys.executable)"], "Python").await;
+        if probe.available {
+            return Ok(candidate);
+        }
+    }
+    Err("Neither 'python' nor 'python3' can start a working Python interpreter. Check PYTHONHOME/PYTHONPATH and your Python installation, then retry.".into())
+}
+
 async fn check_command(command: &str, args: &[&str], tool: &str) -> ToolCheck {
     let mut process = Command::new(command);
     process.args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
@@ -203,10 +224,7 @@ async fn check_command(command: &str, args: &[&str], tool: &str) -> ToolCheck {
             let version = stdout.lines().next().filter(|line| !line.trim().is_empty()).or_else(|| stderr.lines().next()).unwrap_or("").trim().to_string();
             ToolCheck { tool: tool.into(), available: true, version: if version.is_empty() { None } else { Some(version) }, message: "Available".into() }
         }
-        Ok(Ok(output)) => {
-            let error = String::from_utf8_lossy(&output.stderr).lines().next().unwrap_or("Command returned an error").trim().to_string();
-            ToolCheck { tool: tool.into(), available: false, version: None, message: if error.is_empty() { "Command failed".into() } else { error } }
-        }
+        Ok(Ok(output)) => ToolCheck { tool: tool.into(), available: false, version: None, message: command_error_excerpt(&output) },
         Ok(Err(error)) => ToolCheck { tool: tool.into(), available: false, version: None, message: format!("Not available: {error}") },
         Err(_) => ToolCheck { tool: tool.into(), available: false, version: None, message: "Version check timed out after 8 seconds".into() },
     }
@@ -268,18 +286,27 @@ pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolChec
         // Run Python module probes with the same timeout and child-process cleanup
         // as other tool checks. Unbounded synchronous status() calls could hang
         // the tool check indefinitely on a broken Python environment.
-        for (name, args, description) in [
-            ("Tkinter", vec!["-c", "import tkinter"], "Python Tkinter module"),
-            ("TkinterDnD", vec!["-c", "import tkinterdnd2"], "Python tkinterdnd2 dependency from requirements.txt"),
-            ("PyInstaller", vec!["-m", "PyInstaller", "--version"], "Python packaging module"),
-        ] {
-            let probe = check_command("python3", &args, name).await;
-            all.push(ToolCheck {
-                tool: name.into(),
-                available: probe.available,
-                version: probe.version,
-                message: if probe.available { description.into() } else { format!("{description}: {}", probe.message) },
-            });
+        match select_python_command().await {
+            Ok(python) => {
+                for (name, args, description) in [
+                    ("Tkinter", vec!["-c", "import tkinter"], "Python Tkinter module"),
+                    ("TkinterDnD", vec!["-c", "import tkinterdnd2"], "Python tkinterdnd2 dependency from requirements.txt"),
+                    ("PyInstaller", vec!["-m", "PyInstaller", "--version"], "Python packaging module"),
+                ] {
+                    let probe = check_command(python, &args, name).await;
+                    all.push(ToolCheck {
+                        tool: name.into(),
+                        available: probe.available,
+                        version: probe.version,
+                        message: if probe.available { format!("{description} ({python})") } else { format!("{description} using {python}: {}", probe.message) },
+                    });
+                }
+            }
+            Err(error) => {
+                for name in ["Tkinter", "TkinterDnD", "PyInstaller"] {
+                    all.push(ToolCheck { tool: name.into(), available: false, version: None, message: error.clone() });
+                }
+            }
         }
         for (name, available) in [
             ("appimagetool", executable_available("appimagetool")),
@@ -340,14 +367,14 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
                 return Err(format!("Missing required tool or failed version check: {label}. Install it and ensure it is on PATH, then run Check tools again."));
             }
         }
-        let python = if cfg!(windows) { "python" } else { "python3" };
+        let python = select_python_command().await?;
         let tkinter = check_command(python, &["-c", "import tkinter"], "Tkinter").await;
         if !tkinter.available {
             return Err(format!("Tkinter is missing from the active Python installation. On Ubuntu/Debian, install it with: sudo apt install python3-tk. Details: {}", tkinter.message));
         }
         let tkinterdnd = check_command(python, &["-c", "import tkinterdnd2"], "TkinterDnD").await;
         if !tkinterdnd.available {
-            return Err(format!("TkinterDnD is required by DroidLab but is missing from this Python environment. Install it with: python3 -m pip install tkinterdnd2. Details: {}", tkinterdnd.message));
+            return Err(format!("TkinterDnD is required by DroidLab but is missing from this Python environment. Install it with: {python} -m pip install tkinterdnd2. Details: {}", tkinterdnd.message));
         }
         let pyinstaller = check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller").await;
         if !pyinstaller.available {
@@ -471,7 +498,7 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         // DroidLab's build script invokes wget, tar, PyInstaller, and appimagetool.
         let mut cmd = Command::new("bash");
         cmd.args(&args);
-        cmd.env("PYTHON", "python3");
+        cmd.env("PYTHON", select_python_command().await.unwrap_or("python3"));
         cmd
     } else {
         let mut cmd = Command::new(program);
