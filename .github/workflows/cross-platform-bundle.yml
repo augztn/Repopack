@@ -1,4 +1,5 @@
-name: Cross-platform test bundle
+name: Windows and Linux desktop builds 
+
 
 on:
   push:
@@ -11,12 +12,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: repopack-bundle-${{ github.ref }}
+  group: repopack-desktop-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-desktop:
-    name: Build ${{ matrix.platform }} packages
+    name: Build ${{ matrix.platform }} desktop package
     strategy:
       fail-fast: false
       matrix:
@@ -25,8 +26,6 @@ jobs:
             os: ubuntu-22.04
           - platform: windows
             os: windows-latest
-          - platform: macos
-            os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -71,120 +70,3 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  build-android:
-    name: Build Android APK
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          # The legacy `tools` SDK package was removed by Google and makes setup-android fail.
-          packages: platform-tools
-          accept-android-sdk-licenses: true
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-      - name: Install Android NDK and SDK components
-        run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
-      - name: Install frontend dependencies
-        run: npm install
-      - name: Generate application icons
-        run: npm run icons
-      - name: Initialize Tauri Android project
-        run: npm run tauri -- android init --ci
-      - name: Build APK
-        run: npm run tauri -- android build --apk
-      - name: Sign and verify installable APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          unsigned_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*-unsigned.apk' -print -quit)"
-          if [ -z "$unsigned_apk" ]; then
-            echo "Could not find the expected unsigned release APK."
-            find src-tauri/gen/android/app/build/outputs -maxdepth 6 -type f -print || true
-            exit 1
-          fi
-
-          # CI release APKs are unsigned by default. Use a temporary debug key for
-          # test installation only; never use this key for production releases.
-          key_store="$RUNNER_TEMP/repopack-debug.keystore"
-          keytool -genkeypair -v \
-            -keystore "$key_store" \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
-
-          mkdir -p package-out/android
-          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          "$apksigner" sign \
-            --ks "$key_store" \
-            --ks-key-alias androiddebugkey \
-            --ks-pass pass:android \
-            --key-pass pass:android \
-            --out package-out/android/Repopack-universal-debug.apk \
-            "$unsigned_apk"
-          "$apksigner" verify --verbose package-out/android/Repopack-universal-debug.apk
-          if [ ! -s package-out/android/Repopack-universal-debug.apk ]; then
-            echo "Signed APK is missing or empty."
-            exit 1
-          fi
-      - name: Upload Android APK
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: repopack-android
-          path: package-out/android/*.apk
-          if-no-files-found: error
-          retention-days: 3
-
-  combine-test-bundle:
-    if: github.event_name != 'pull_request'
-    name: Combine installers into one ZIP
-    needs: [build-desktop, build-android]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Download all platform packages
-        uses: actions/download-artifact@v4
-        with:
-          path: collected
-          pattern: repopack-*
-          merge-multiple: false
-      - name: Add testing instructions
-        run: |
-          cat > TESTING-README.txt <<'EOF'
-          Repopack cross-platform test bundle
-
-          This ZIP contains separate native packages for each desktop operating system.
-
-          Windows: open the repopack-windows folder and run the available .msi or setup .exe.
-          macOS: open the repopack-macos folder and use the available .dmg or .app bundle.
-          Linux: open the repopack-linux folder and use the available .deb, .rpm, or .AppImage package.
-
-          Install only packages matching your operating system. These are unsigned CI test builds and may show operating-system security warnings.
-          The package type depends on the bundle targets produced successfully by Tauri.
-          Android: open the repopack-android folder and install the included APK on an Android device. You may need to allow installation from the app used to open the downloaded file.
-          EOF
-      - name: Create combined ZIP
-        run: zip -r Repopack-cross-platform-test-bundle.zip collected TESTING-README.txt
-      - name: Upload combined ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: Repopack-cross-platform-test-bundle
-          path: Repopack-cross-platform-test-bundle.zip
-          if-no-files-found: error
-          retention-days: 3
