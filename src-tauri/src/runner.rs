@@ -1,9 +1,21 @@
-use std::{fs, path::{Path, PathBuf}, process::{Command as OsCommand, Stdio}, time::Duration};
+use std::{fs, path::{Path, PathBuf}, process::{Command as OsCommand, Stdio}, sync::Mutex, time::Duration};
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::{io::{AsyncBufReadExt, BufReader}, process::Command, time};
+use tokio::{io::{AsyncBufReadExt, BufReader}, process::Command, sync::oneshot, time};
 
 #[derive(Clone, serde::Serialize)]
 struct RunnerLog { level: String, message: String }
+
+#[derive(Default)]
+pub struct BuildJobState { cancellation: Mutex<Option<oneshot::Sender<()>>> }
+
+#[tauri::command]
+pub fn cancel_build(app: AppHandle, state: tauri::State<'_, BuildJobState>) -> Result<(), String> {
+    let sender = state.cancellation.lock().map_err(|_| "Build state is unavailable.")?.take();
+    match sender {
+        Some(sender) => { let _ = sender.send(()); emit(&app, "warning", "Cancellation requested."); Ok(()) },
+        None => Err("There is no active build to cancel.".into()),
+    }
+}
 
 fn emit(app: &AppHandle, level: &str, message: impl Into<String>) {
     let _ = app.emit("job-log", RunnerLog { level: level.into(), message: message.into() });
@@ -166,7 +178,7 @@ pub async fn check_build_tools() -> Vec<ToolCheck> {
 }
 
 #[tauri::command]
-pub async fn run_approved_build(app: AppHandle, root_path: String, profile: String) -> Result<BuildResult, String> {
+pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJobState>, root_path: String, profile: String) -> Result<BuildResult, String> {
     let root = approved_workspace(&app, &root_path)?;
     let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {
         "npm-install" => {
@@ -258,30 +270,54 @@ pub async fn run_approved_build(app: AppHandle, root_path: String, profile: Stri
         }
     });
 
-    let (exit_code, success, timed_out) = match time::timeout(Duration::from_secs(1800), child.wait()).await {
-        Ok(Ok(status)) => (status.code(), status.success(), false),
-        Ok(Err(error)) => {
+    let (cancel_tx, cancel_rx) = oneshot::channel();
+    {
+        let mut slot = state.cancellation.lock().map_err(|_| "Build state is unavailable.")?;
+        if slot.is_some() {
             let _ = child.kill().await;
-            stdout_task.abort();
-            stderr_task.abort();
-            return Err(format!("Could not wait for build process: {error}"));
+            return Err("Another build is already running.".into());
         }
-        Err(_) => {
-            emit(&app, "warning", "Build exceeded the 30-minute limit; terminating the main build process.");
+        *slot = Some(cancel_tx);
+    }
+    let outcome = tokio::select! {
+        waited = time::timeout(Duration::from_secs(1800), child.wait()) => match waited {
+            Ok(Ok(status)) => (status.code(), status.success(), false, false),
+            Ok(Err(error)) => {
+                let _ = child.kill().await;
+                stdout_task.abort();
+                stderr_task.abort();
+                if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
+                return Err(format!("Could not wait for build process: {error}"));
+            }
+            Err(_) => {
+                emit(&app, "warning", "Build exceeded the 30-minute limit; terminating the main build process.");
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                stdout_task.abort();
+                stderr_task.abort();
+                (None, false, true, false)
+            }
+        },
+        _ = cancel_rx => {
+            emit(&app, "warning", "Build cancellation requested; terminating the main build process.");
             let _ = child.kill().await;
             let _ = child.wait().await;
             stdout_task.abort();
             stderr_task.abort();
-            (None, false, true)
+            (None, false, false, true)
         }
     };
-    if !timed_out {
+    if let Ok(mut slot) = state.cancellation.lock() { *slot = None; }
+    let (exit_code, success, timed_out, cancelled) = outcome;
+    if !timed_out && !cancelled {
         let _ = stdout_task.await;
         let _ = stderr_task.await;
     }
     let artifacts = if success { discover_artifacts(&root) } else { Vec::new() };
-    let message = if timed_out {
-        format!("{label} timed out after 30 minutes. The main process was terminated; review logs for child-process cleanup.")
+    let message = if cancelled {
+        format!("{label} was cancelled. Child processes spawned by the build tool may require platform-specific cleanup.")
+    } else if timed_out {
+        format!("{label} timed out after 30 minutes. The main process was terminated; child-process cleanup is platform-dependent.")
     } else if success {
         if artifacts.is_empty() { format!("{label} completed successfully, but no recognized output artifact was found.") }
         else { format!("{label} completed successfully; found {} artifact(s).", artifacts.len()) }
