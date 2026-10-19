@@ -71,10 +71,60 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Install Android NDK and SDK components
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
+      - name: Install frontend dependencies
+        run: npm install
+      - name: Initialize Tauri Android project
+        run: npm run tauri -- android init --ci
+      - name: Build APK
+        run: npm run tauri -- android build --apk
+      - name: Collect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package-out/android
+          find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' -exec cp {} package-out/android/ \;
+          if [ -z "$(find package-out/android -type f -name '*.apk' -print -quit)" ]; then
+            echo "Tauri Android build completed without producing an APK."
+            find src-tauri/gen/android/app/build/outputs -maxdepth 5 -type f -print || true
+            exit 1
+          fi
+      - name: Upload Android APK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: repopack-android
+          path: package-out/android/*.apk
+          if-no-files-found: error
+          retention-days: 3
+
   combine-test-bundle:
     if: github.event_name != 'pull_request'
     name: Combine installers into one ZIP
-    needs: build-desktop
+    needs: [build-desktop, build-android]
     runs-on: ubuntu-22.04
     steps:
       - name: Download all platform packages
@@ -96,7 +146,7 @@ jobs:
 
           Install only packages matching your operating system. These are unsigned CI test builds and may show operating-system security warnings.
           The package type depends on the bundle targets produced successfully by Tauri.
-          Android APKs are not included in this desktop bundle.
+          Android: open the repopack-android folder and install the included APK on an Android device. You may need to allow installation from the app used to open the downloaded file.
           EOF
       - name: Create combined ZIP
         run: zip -r Repopack-cross-platform-test-bundle.zip collected TESTING-README.txt
