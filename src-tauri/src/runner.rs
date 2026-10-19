@@ -200,7 +200,7 @@ fn command_error_excerpt(output: &std::process::Output) -> String {
     let excerpt = combined.lines().filter(|line| !line.trim().is_empty()).take(4).collect::<Vec<_>>().join(" | ");
     let excerpt = excerpt.trim();
     if excerpt.is_empty() { "Command returned a non-zero exit code".into() }
-    else if excerpt.len() > 500 { format!("{}…", &excerpt[..excerpt.floor_char_boundary(500)]) }
+    else if excerpt.chars().count() > 500 { format!("{}…", excerpt.chars().take(500).collect::<String>()) }
     else { excerpt.to_string() }
 }
 
