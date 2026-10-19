@@ -221,7 +221,7 @@ export default function App() {
                 return <div className={`phase-card ${completed ? "completed" : ""} ${active ? "current" : ""}`} key={item.title}>
                   <div className="phase-top"><span className="phase-index">{completed ? "✓" : `0${index + 1}`}</span>{index < 3 && <span className="phase-state">{completed ? "DONE" : active && index === 0 ? "RUNNING" : "WAITING"}</span>}{index === 3 && <span className={`phase-state ${completed ? "" : active ? "" : "future"}`}>{completed ? "DONE" : active ? "RUNNING" : "READY"}</span>}</div>
                   <strong>{item.title}</strong><p>{item.detail}</p>
-                  <div className="phase-bar"><span style={{ width: completed ? "100%" : active && index === 0 ? "48%" : "0%" }} /></div>
+                  <div className="phase-bar"><span style={{ width: completed ? "100%" : active ? "48%" : "0%" }} /></div>
                 </div>;
               })}
             </div>
