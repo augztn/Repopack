@@ -134,6 +134,7 @@ export default function App() {
       "node-build": "npm run build",
       "rust-release": "cargo build --release",
       "electron-build": "npm run build (Electron project)",
+      "electron-package": "Electron package script (dist/make/package)",
       "flutter-windows": "flutter build windows",
       "flutter-linux": "flutter build linux",
       "flutter-apk": "flutter build apk",
@@ -250,6 +251,7 @@ export default function App() {
                 <option value="node-build">Node / web build</option>
                 <option value="rust-release">Rust — release executable</option>
                 <option value="electron-build">Electron project build script</option>
+                <option value="electron-package">Electron — package installer</option>
                 <option value="flutter-windows">Flutter — Windows</option>
                 <option value="flutter-linux">Flutter — Linux</option>
                 <option value="flutter-apk">Flutter — Android APK</option>
