@@ -122,7 +122,7 @@ export default function App() {
       setPhase("Inspection complete");
       setToolChecks(null);
       // Automatically inspect the local toolchain as soon as the project type is known.
-      void checkTools();
+      void checkTools(prepared.rootPath);
       setLogs((current) => [
         ...current,
         `[success] Project detected: ${prepared.projectType}`,
@@ -136,11 +136,12 @@ export default function App() {
     }
   }
 
-  async function checkTools() {
+  async function checkTools(rootPath?: string) {
     setCheckingTools(true);
     try {
-      const checks = result
-        ? await invoke<ToolCheck[]>("check_project_build_tools", { rootPath: result.rootPath })
+      const inspectedRoot = rootPath ?? result?.rootPath;
+      const checks = inspectedRoot
+        ? await invoke<ToolCheck[]>("check_project_build_tools", { rootPath: inspectedRoot })
         : await invoke<ToolCheck[]>("check_build_tools");
       setToolChecks(checks);
       setLogs((current) => [...current, `[info] Checked ${checks.length} local build tools.`]);
