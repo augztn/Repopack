@@ -139,7 +139,9 @@ export default function App() {
   async function checkTools() {
     setCheckingTools(true);
     try {
-      const checks = await invoke<ToolCheck[]>("check_build_tools");
+      const checks = result
+        ? await invoke<ToolCheck[]>("check_project_build_tools", { rootPath: result.rootPath })
+        : await invoke<ToolCheck[]>("check_build_tools");
       setToolChecks(checks);
       setLogs((current) => [...current, `[info] Checked ${checks.length} local build tools.`]);
     } catch (error) {
