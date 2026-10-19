@@ -4,6 +4,8 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
 type LogEvent = { level: string; message: string };
+type ToolCheck = { tool: string; available: boolean; version?: string; message: string };
+type BuildResult = { profile: string; exitCode?: number; success: boolean; message: string };
 type SourceInfo = {
   name: string;
   rootPath: string;
@@ -29,6 +31,11 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState("Ready");
   const [result, setResult] = useState<SourceInfo | null>(null);
+  const [toolChecks, setToolChecks] = useState<ToolCheck[] | null>(null);
+  const [checkingTools, setCheckingTools] = useState(false);
+  const [buildProfile, setBuildProfile] = useState("node-build");
+  const [building, setBuilding] = useState(false);
+  const [buildResult, setBuildResult] = useState<BuildResult | null>(null);
   const [logs, setLogs] = useState<string[]>([
     "[system] Repopack local workspace initialized.",
     "[system] Build scripts are not executed during source inspection.",
@@ -89,6 +96,8 @@ export default function App() {
     try {
       const prepared = await invoke<SourceInfo>("prepare_source", { input });
       setResult(prepared);
+      setBuildResult(null);
+      setBuildProfile(prepared.projectType === "tauri" ? "tauri-build" : prepared.projectType === "electron" ? "electron-build" : prepared.projectType === "flutter" ? "flutter-apk" : prepared.projectType === "android-gradle" ? "android-debug-apk" : "node-build");
       setPhase("Inspection complete");
       setLogs((current) => [
         ...current,
@@ -100,6 +109,48 @@ export default function App() {
       setLogs((current) => [...current, `[error] ${String(error)}`]);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function checkTools() {
+    setCheckingTools(true);
+    try {
+      const checks = await invoke<ToolCheck[]>("check_build_tools");
+      setToolChecks(checks);
+      setLogs((current) => [...current, `[info] Checked ${checks.length} local build tools.`]);
+    } catch (error) {
+      setLogs((current) => [...current, `[error] Toolchain check failed: ${String(error)}`]);
+    } finally {
+      setCheckingTools(false);
+    }
+  }
+
+  async function runBuild() {
+    if (!result) return;
+    const labels: Record<string, string> = {
+      "tauri-build": "npm run tauri build",
+      "node-build": "npm run build",
+      "electron-build": "npm run build (Electron project)",
+      "flutter-windows": "flutter build windows",
+      "flutter-linux": "flutter build linux",
+      "flutter-apk": "flutter build apk",
+      "android-debug-apk": "Gradle assembleDebug",
+    };
+    const command = labels[buildProfile] ?? buildProfile;
+    if (!window.confirm(`Run ${command} in this project? Build scripts can execute arbitrary code. Continue only if you trust this repository.`)) return;
+    setBuilding(true);
+    setBuildResult(null);
+    setPhase("Build running");
+    setLogs((current) => [...current, `[approval] User approved build profile: ${buildProfile}`]);
+    try {
+      const outcome = await invoke<BuildResult>("run_approved_build", { rootPath: result.rootPath, profile: buildProfile });
+      setBuildResult(outcome);
+      setPhase(outcome.success ? "Build complete" : "Build failed");
+    } catch (error) {
+      setPhase("Build failed");
+      setLogs((current) => [...current, `[error] ${String(error)}`]);
+    } finally {
+      setBuilding(false);
     }
   }
 
@@ -182,6 +233,26 @@ export default function App() {
             <div className="result-divider" />
             <div className="result-details"><strong>Detected markers</strong><div className="marker-list">{result.indicators.map((item) => <span key={item}>{item}</span>)}</div></div>
             <div className="recommendation"><span>↗</span><div><strong>Recommended next step</strong><p>{result.nextStep}</p></div></div>
+          </section>}
+
+          {result && <section className="result-card panel build-controls">
+            <div className="result-heading"><div><div className="eyebrow">LOCAL TOOLCHAIN</div><h2>Build this project</h2></div><button type="button" className="button button-secondary" onClick={checkTools} disabled={checkingTools}>{checkingTools ? "Checking…" : "Check tools"}</button></div>
+            <p className="result-path">Builds run locally in the inspected workspace. Review the profile and approve execution explicitly.</p>
+            <div className="build-action-row">
+              <label className="build-profile-label" htmlFor="build-profile">BUILD PROFILE</label>
+              <select id="build-profile" value={buildProfile} onChange={(event) => { setBuildProfile(event.target.value); setBuildResult(null); }} disabled={building}>
+                <option value="tauri-build">Tauri desktop package</option>
+                <option value="node-build">Node / web build</option>
+                <option value="electron-build">Electron project build script</option>
+                <option value="flutter-windows">Flutter — Windows</option>
+                <option value="flutter-linux">Flutter — Linux</option>
+                <option value="flutter-apk">Flutter — Android APK</option>
+                <option value="android-debug-apk">Android Gradle — debug APK</option>
+              </select>
+              <button type="button" className="button button-primary" onClick={runBuild} disabled={building}>{building ? <><span className="spinner" /> Building…</> : <>Approve &amp; build <span>→</span></>}</button>
+            </div>
+            {toolChecks && <div className="tool-check-grid">{toolChecks.map((tool) => <div className={`tool-check ${tool.available ? "available" : "missing"}`} key={tool.tool}><span>{tool.available ? "✓" : "×"}</span><div><strong>{tool.tool}</strong><small>{tool.version ?? tool.message}</small></div></div>)}</div>}
+            {buildResult && <div className={`build-result ${buildResult.success ? "available" : "missing"}`}><strong>{buildResult.success ? "Build completed" : "Build failed"}</strong><p>{buildResult.message}</p></div>}
           </section>}
 
           <section className="console-section">
