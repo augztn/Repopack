@@ -42,3 +42,13 @@ pub fn export_diagnostic_logs(app: AppHandle, destination_path: String) -> Resul
     zip.finish().map_err(|e| e.to_string())?;
     Ok(destination.to_string_lossy().into_owned())
 }
+
+#[tauri::command]
+pub fn export_diagnostic_text(app: AppHandle, destination_path: String) -> Result<String, String> {
+    let destination = PathBuf::from(destination_path);
+    if let Some(parent) = destination.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+    let source = directory(&app)?.join("repopack.log");
+    if source.is_file() { fs::copy(source, &destination).map_err(|e| e.to_string())?; }
+    else { fs::write(&destination, "No diagnostic log has been recorded yet.").map_err(|e| e.to_string())?; }
+    Ok(destination.to_string_lossy().into_owned())
+}
