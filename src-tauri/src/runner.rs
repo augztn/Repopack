@@ -238,13 +238,21 @@ pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolChec
 
     let mut all = checks;
     if cfg!(target_os = "linux") {
-        let python = "python3";
-        for (name, available, message) in [
-            ("Tkinter", OsCommand::new(python).args(["-c", "import tkinter"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python Tkinter module"),
-            ("TkinterDnD", OsCommand::new(python).args(["-c", "import tkinterdnd2"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python tkinterdnd2 dependency from requirements.txt"),
-            ("PyInstaller", OsCommand::new(python).args(["-m", "PyInstaller", "--version"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python packaging module"),
+        // Run Python module probes with the same timeout and child-process cleanup
+        // as other tool checks. Unbounded synchronous status() calls could hang
+        // the tool check indefinitely on a broken Python environment.
+        for (name, args, description) in [
+            ("Tkinter", vec!["-c", "import tkinter"], "Python Tkinter module"),
+            ("TkinterDnD", vec!["-c", "import tkinterdnd2"], "Python tkinterdnd2 dependency from requirements.txt"),
+            ("PyInstaller", vec!["-m", "PyInstaller", "--version"], "Python packaging module"),
         ] {
-            all.push(ToolCheck { tool: name.into(), available, version: None, message: message.into() });
+            let probe = check_command("python3", &args, name).await;
+            all.push(ToolCheck {
+                tool: name.into(),
+                available: probe.available,
+                version: probe.version,
+                message: if probe.available { description.into() } else { format!("{description}: {}", probe.message) },
+            });
         }
         for (name, available) in [
             ("appimagetool", executable_available("appimagetool")),
