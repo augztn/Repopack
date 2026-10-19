@@ -185,6 +185,27 @@ export default function App() {
   }
 
   const detectedColor = result ? "ready" : "neutral";
+  const requiredToolsByProfile: Record<string, string[]> = {
+    "npm-install": ["npm"],
+    "tauri-build": ["Node.js", "npm", "Rust / Cargo"],
+    "node-build": ["Node.js", "npm"],
+    "rust-release": ["Rust / Cargo"],
+    "python-install": ["Python", "Python 3"],
+    "python-package": ["Python", "Python 3"],
+    "electron-build": ["Node.js", "npm"],
+    "electron-package": ["Node.js", "npm"],
+    "flutter-windows": ["Flutter"],
+    "flutter-linux": ["Flutter"],
+    "flutter-apk": ["Flutter", "Java", "Android SDK"],
+    "android-debug-apk": ["Java", "Android SDK"],
+  };
+  const requiredTools = requiredToolsByProfile[buildProfile] ?? [];
+  const missingRequiredTools = requiredTools.filter((name) => {
+    const matching = toolChecks?.filter((tool) => name === "Python" || name === "Python 3"
+      ? tool.tool === "Python" || tool.tool === "Python 3"
+      : tool.tool === name);
+    return matching && matching.length > 0 && !matching.some((tool) => tool.available);
+  });
 
   return (
     <div className="app-shell">
@@ -284,6 +305,7 @@ export default function App() {
                 <option value="flutter-apk">Flutter — Android APK</option>
                 <option value="android-debug-apk">Android Gradle — debug APK</option>
               </select>
+              {requiredTools.length > 0 && <p className="result-path">Required tools: {requiredTools.join(", ")}{toolChecks ? (missingRequiredTools.length ? ` — missing/unavailable: ${missingRequiredTools.join(", ")}` : " — detected as available") : " — checking availability automatically"}</p>}
               <div className="build-action-buttons"><button type="button" className="button button-primary" onClick={runBuild} disabled={building}>{building ? <><span className="spinner" /> Building…</> : <>Approve &amp; build <span>→</span></>}</button>{building && <button type="button" className="button button-secondary" onClick={async () => { try { await invoke("cancel_build"); setLogs((current) => [...current, "[warning] Cancellation requested."]); } catch (error) { setLogs((current) => [...current, `[error] Could not cancel build: ${String(error)}`]); } }}>Cancel build</button>}</div>
             </div>
             {checkingTools && <p className="result-path">Detecting installed build tools and versions…</p>}{toolChecks && <><div className="recommendation"><span>✓</span><div><strong>Toolchain scan complete</strong><p>{toolChecks.filter((tool) => tool.available).length} of {toolChecks.length} detected tools are available. Missing tools are shown below; a profile may require tools beyond those listed.</p></div></div><div className="tool-check-grid">{toolChecks.map((tool) => <div className={`tool-check ${tool.available ? "available" : "missing"}`} key={tool.tool}><span>{tool.available ? "✓" : "×"}</span><div><strong>{tool.tool}</strong><small>{tool.version ?? tool.message}</small></div></div>)}</div></>}
