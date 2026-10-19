@@ -101,6 +101,8 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
       - name: Install frontend dependencies
         run: npm install
+      - name: Generate application icons
+        run: npm run icons
       - name: Initialize Tauri Android project
         run: npm run tauri -- android init --ci
       - name: Build APK
