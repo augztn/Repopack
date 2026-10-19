@@ -455,6 +455,31 @@ mod tests {
     }
 
     #[test]
+    fn detects_nested_python_desktop_and_droidlab_profiles() {
+        let root = std::env::temp_dir().join(format!("repopack-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::create_dir_all(root.join("scripts")).unwrap();
+        fs::write(root.join("requirements.txt"), "tkinterdnd2").unwrap();
+        fs::write(root.join("src/app.py"), "print('gui')").unwrap();
+        fs::write(root.join("scripts/build-linux.sh"), "#!/usr/bin/env bash").unwrap();
+        let (project_type, indicators, _) = super::detect_project(&root);
+        assert_eq!(project_type, "python-desktop-appimage");
+        assert!(indicators.iter().any(|marker| marker == "src/app.py"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn detects_nested_python_desktop_without_appimage_script() {
+        let root = std::env::temp_dir().join(format!("repopack-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("requirements.txt"), "tkinterdnd2").unwrap();
+        fs::write(root.join("src/app.py"), "print('gui')").unwrap();
+        let (project_type, _, _) = super::detect_project(&root);
+        assert_eq!(project_type, "python-desktop");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn detects_electron_from_manifest_dependencies() {
         let root = std::env::temp_dir().join(format!("repopack-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
