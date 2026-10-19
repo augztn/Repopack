@@ -96,4 +96,4 @@ The `Cross-platform test bundle` workflow builds Repopack natively on Windows, m
 
 To download it, open the repository's **Actions** tab, select **Cross-platform test bundle**, open a successful run, and download the `Repopack-cross-platform-test-bundle` artifact. The ZIP contains a folder for each desktop platform plus testing instructions. GitHub keeps these test artifacts for 14 days.
 
-These are unsigned test builds; they are separate native packages, not one executable that runs on every OS. Android APK output is not included until a Tauri Android project and Android build toolchain are configured.
+These are unsigned test builds; they are separate native packages, not one executable that runs on every OS. The workflow also attempts an Android APK build using Tauri's Android project initialization and Android SDK/NDK toolchain. Check the workflow run logs to confirm that the first Android build succeeds.
