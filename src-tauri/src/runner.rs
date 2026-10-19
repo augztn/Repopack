@@ -405,6 +405,12 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         let mut cmd = Command::new("cmd");
         cmd.arg("/C").arg(program).args(&args);
         cmd
+    } else if program == "bash" && args.first() == Some(&"scripts/build-linux.sh") {
+        // DroidLab's build script invokes wget, tar, PyInstaller, and appimagetool.
+        let mut cmd = Command::new("bash");
+        cmd.args(&args);
+        cmd.env("PYTHON", "python3");
+        cmd
     } else {
         let mut cmd = Command::new(program);
         cmd.args(&args);
