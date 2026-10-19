@@ -239,13 +239,21 @@ pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolChec
     let mut all = checks;
     if cfg!(target_os = "linux") {
         let python = "python3";
-        all.push(check_command(python, &["-c", "import tkinter; print('Tkinter import OK')"], "Tkinter").await);
-        all.push(check_command(python, &["-m", "PyInstaller", "--version"], "PyInstaller").await);
-        all.push(check_command("appimagetool", &["--version"], "appimagetool").await);
-        all.push(check_command("wget", &["--version"], "wget").await);
-        all.push(check_command("tar", &["--version"], "tar").await);
-        all.push(check_command("xz", &["--version"], "xz").await);
-        all.push(check_command("bash", &["--version"], "Bash").await);
+        for (name, available, message) in [
+            ("Tkinter", OsCommand::new(python).args(["-c", "import tkinter"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python Tkinter module"),
+            ("PyInstaller", OsCommand::new(python).args(["-m", "PyInstaller", "--version"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false), "Python packaging module"),
+        ] {
+            all.push(ToolCheck { tool: name.into(), available, version: None, message: message.into() });
+        }
+        for (name, available) in [
+            ("appimagetool", executable_available("appimagetool")),
+            ("wget", executable_available("wget")),
+            ("tar", executable_available("tar")),
+            ("xz", executable_available("xz")),
+            ("Bash", executable_available("bash")),
+        ] {
+            all.push(ToolCheck { tool: name.into(), available, version: None, message: if available { "Executable found on PATH".into() } else { "Not found on PATH".into() } });
+        }
     } else {
         all.push(ToolCheck {
             tool: "DroidLab AppImage target".into(),
