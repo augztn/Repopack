@@ -1,0 +1,107 @@
+name: Cross-platform test bundle
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repopack-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-desktop:
+    name: Build ${{ matrix.platform }} packages
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-22.04
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev libwebkit2gtk-4.1-dev
+      - name: Install frontend dependencies
+        run: npm install
+      - name: Build native app bundles
+        run: npm run tauri -- build
+      - name: Collect platform packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="src-tauri/target/release/bundle"
+          output_dir="package-out/${{ matrix.platform }}"
+          if [ ! -d "$source_dir" ]; then
+            echo "Expected Tauri bundle directory was not created: $source_dir"
+            exit 1
+          fi
+          mkdir -p "$output_dir"
+          cp -R "$source_dir"/. "$output_dir"/
+          if [ -z "$(find "$output_dir" -type f -print -quit)" ]; then
+            echo "No installer or application bundle files were produced."
+            exit 1
+          fi
+      - name: Upload platform packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: repopack-${{ matrix.platform }}
+          path: package-out/${{ matrix.platform }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  combine-test-bundle:
+    name: Combine installers into one ZIP
+    needs: build-desktop
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download all platform packages
+        uses: actions/download-artifact@v4
+        with:
+          path: collected
+          pattern: repopack-*
+          merge-multiple: false
+      - name: Add testing instructions
+        run: |
+          cat > TESTING-README.txt <<'EOF'
+          Repopack cross-platform test bundle
+
+          This ZIP contains separate native packages for each desktop operating system.
+
+          Windows: open the repopack-windows folder and run the available .msi or setup .exe.
+          macOS: open the repopack-macos folder and use the available .dmg or .app bundle.
+          Linux: open the repopack-linux folder and use the available .deb, .rpm, or .AppImage package.
+
+          Install only packages matching your operating system. These are unsigned CI test builds and may show operating-system security warnings.
+          The package type depends on the bundle targets produced successfully by Tauri.
+          Android APKs are not included in this desktop bundle.
+          EOF
+      - name: Create combined ZIP
+        run: zip -r Repopack-cross-platform-test-bundle.zip collected TESTING-README.txt
+      - name: Upload combined ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Repopack-cross-platform-test-bundle
+          path: Repopack-cross-platform-test-bundle.zip
+          if-no-files-found: error
+          retention-days: 14
