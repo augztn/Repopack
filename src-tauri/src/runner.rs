@@ -512,6 +512,12 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
         cmd.args(&args);
         cmd
     };
+    // A packaged AppImage may export PYTHONHOME/PYTHONPATH for its bundled runtime.
+    // Remove them for every host Python build command, not just the DroidLab-specific
+    // shell-script profile, so generic PyInstaller builds can import the host stdlib.
+    if matches!(program, "python" | "python3") {
+        command.env_remove("PYTHONHOME").env_remove("PYTHONPATH");
+    }
     command.current_dir(&root).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
 
     #[cfg(unix)]
