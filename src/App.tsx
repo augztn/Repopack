@@ -158,6 +158,8 @@ export default function App() {
       "rust-release": "cargo build --release",
       "python-install": "Python dependency setup (pip install)",
       "python-package": "PyInstaller single-file package",
+      "python-desktop-package": "PyInstaller desktop application package",
+      "droidlab-appimage": "DroidLab Linux AppImage package",
       "electron-build": "npm run build (Electron project)",
       "electron-package": "Electron package script (dist/make/package)",
       "flutter-windows": "flutter build windows",
@@ -192,6 +194,8 @@ export default function App() {
     "rust-release": ["Rust / Cargo"],
     "python-install": ["Python", "Python 3"],
     "python-package": ["Python", "Python 3"],
+    "python-desktop-package": ["Python", "Python 3"],
+    "droidlab-appimage": ["Python", "Python 3"],
     "electron-build": ["Node.js", "npm"],
     "electron-package": ["Node.js", "npm"],
     "flutter-windows": ["Flutter"],
@@ -298,6 +302,8 @@ export default function App() {
                 <option value="rust-release">Rust — release executable</option>
                 <option value="python-install">Python — install dependencies</option>
                 <option value="python-package">Python — package with PyInstaller</option>
+                <option value="python-desktop-package">Python desktop — package nested entry point</option>
+                <option value="droidlab-appimage">DroidLab — Linux AppImage (project build script)</option>
                 <option value="electron-build">Electron project build script</option>
                 <option value="electron-package">Electron — package installer</option>
                 <option value="flutter-windows">Flutter — Windows</option>
