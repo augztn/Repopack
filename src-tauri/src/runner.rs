@@ -73,6 +73,12 @@ pub async fn check_build_tools() -> Vec<ToolCheck> {
 pub async fn run_approved_build(app: AppHandle, root_path: String, profile: String) -> Result<BuildResult, String> {
     let root = approved_workspace(&app, &root_path)?;
     let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {
+        "tauri-build" => {
+            if !root.join("src-tauri/tauri.conf.json").is_file() || !root.join("package.json").is_file() {
+                return Err("Tauri build requires package.json and src-tauri/tauri.conf.json in the project root.".into());
+            }
+            ("npm", vec!["run", "tauri", "--", "build"], "npm run tauri build")
+        }
         "node-build" => {
             if !root.join("package.json").is_file() {
                 return Err("This profile requires package.json in the project root.".into());
