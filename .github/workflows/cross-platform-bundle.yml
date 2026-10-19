@@ -107,15 +107,40 @@ jobs:
         run: npm run tauri -- android init --ci
       - name: Build APK
         run: npm run tauri -- android build --apk
-      - name: Collect APK
+      - name: Sign and verify installable APK
         shell: bash
         run: |
           set -euo pipefail
+          unsigned_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*-unsigned.apk' -print -quit)"
+          if [ -z "$unsigned_apk" ]; then
+            echo "Could not find the expected unsigned release APK."
+            find src-tauri/gen/android/app/build/outputs -maxdepth 6 -type f -print || true
+            exit 1
+          fi
+
+          # CI release APKs are unsigned by default. Use a temporary debug key for
+          # test installation only; never use this key for production releases.
+          key_store="$RUNNER_TEMP/repopack-debug.keystore"
+          keytool -genkeypair -v \
+            -keystore "$key_store" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
           mkdir -p package-out/android
-          find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' -exec cp {} package-out/android/ \;
-          if [ -z "$(find package-out/android -type f -name '*.apk' -print -quit)" ]; then
-            echo "Tauri Android build completed without producing an APK."
-            find src-tauri/gen/android/app/build/outputs -maxdepth 5 -type f -print || true
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$apksigner" sign \
+            --ks "$key_store" \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out package-out/android/Repopack-universal-debug.apk \
+            "$unsigned_apk"
+          "$apksigner" verify --verbose package-out/android/Repopack-universal-debug.apk
+          if [ ! -s package-out/android/Repopack-universal-debug.apk ]; then
+            echo "Signed APK is missing or empty."
             exit 1
           fi
       - name: Upload Android APK
