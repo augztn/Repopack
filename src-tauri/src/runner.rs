@@ -179,15 +179,28 @@ pub async fn run_approved_build(app: AppHandle, root_path: String, profile: Stri
         "android-debug-apk" => {
             let gradlew = if cfg!(windows) { root.join("gradlew.bat") } else { root.join("gradlew") };
             if !gradlew.is_file() { return Err("Android Gradle wrapper not found in project root.".into()); }
-            let wrapper = if cfg!(windows) { "gradlew.bat" } else { "./gradlew" };
-            (wrapper, vec!["assembleDebug"], "Gradle assembleDebug")
+            if cfg!(windows) {
+                ("cmd", vec!["/C", "gradlew.bat", "assembleDebug"], "Gradle assembleDebug")
+            } else {
+                ("./gradlew", vec!["assembleDebug"], "Gradle assembleDebug")
+            }
         }
         _ => return Err("Unknown build profile. Only listed, user-approved profiles are accepted.".into()),
     };
 
     emit(&app, "warning", format!("Starting approved build: {label}. Repository build scripts can execute arbitrary code."));
-    let mut command = Command::new(program);
-    command.args(&args).current_dir(&root).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // Windows tools such as npm and Flutter are commonly exposed as .cmd/.bat
+    // launchers, which need cmd.exe rather than direct CreateProcess execution.
+    let mut command = if cfg!(windows) && matches!(program, "npm" | "flutter") {
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg(program).args(&args);
+        cmd
+    } else {
+        let mut cmd = Command::new(program);
+        cmd.args(&args);
+        cmd
+    };
+    command.current_dir(&root).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
 
     #[cfg(unix)]
     { command.env("CI", "1"); }
