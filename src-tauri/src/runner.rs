@@ -194,42 +194,45 @@ fn check_android_sdk() -> ToolCheck {
 }
 
 async fn check_command(command: &str, args: &[&str], tool: &str) -> ToolCheck {
-    match Command::new(command).args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).output().await {
-        Ok(output) if output.status.success() => {
+    let mut process = Command::new(command);
+    process.args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+    match time::timeout(Duration::from_secs(8), process.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             let version = stdout.lines().next().filter(|line| !line.trim().is_empty()).or_else(|| stderr.lines().next()).unwrap_or("").trim().to_string();
             ToolCheck { tool: tool.into(), available: true, version: if version.is_empty() { None } else { Some(version) }, message: "Available".into() }
         }
-        Ok(output) => {
+        Ok(Ok(output)) => {
             let error = String::from_utf8_lossy(&output.stderr).lines().next().unwrap_or("Command returned an error").trim().to_string();
             ToolCheck { tool: tool.into(), available: false, version: None, message: if error.is_empty() { "Command failed".into() } else { error } }
         }
-        Err(e) => ToolCheck { tool: tool.into(), available: false, version: None, message: format!("Not available: {e}") }
+        Ok(Err(error)) => ToolCheck { tool: tool.into(), available: false, version: None, message: format!("Not available: {error}") },
+        Err(_) => ToolCheck { tool: tool.into(), available: false, version: None, message: "Version check timed out after 8 seconds".into() },
     }
 }
 
 #[tauri::command]
 pub async fn check_build_tools() -> Vec<ToolCheck> {
-    let mut checks = vec![
-        check_command("node", &["--version"], "Node.js").await,
-        check_command("npm", &["--version"], "npm").await,
-        check_command("python", &["--version"], "Python").await,
-        check_command("cargo", &["--version"], "Rust / Cargo").await,
-        check_command("flutter", &["--version"], "Flutter").await,
-        check_command("java", &["-version"], "Java").await,
-        check_command("gradle", &["--version"], "Gradle").await,
-        check_command("adb", &["version"], "Android Debug Bridge").await,
-        check_command("sdkmanager", &["--version"], "Android SDK Manager").await,
-        check_android_sdk(),
-    ];
+    // Run independent probes concurrently so a slow tool cannot block the entire report.
+    let (node, npm, python, cargo, flutter, java, gradle, adb, sdkmanager) = tokio::join!(
+        check_command("node", &["--version"], "Node.js"),
+        check_command("npm", &["--version"], "npm"),
+        check_command("python", &["--version"], "Python"),
+        check_command("cargo", &["--version"], "Rust / Cargo"),
+        check_command("flutter", &["--version"], "Flutter"),
+        check_command("java", &["-version"], "Java"),
+        check_command("gradle", &["--version"], "Gradle"),
+        check_command("adb", &["version"], "Android Debug Bridge"),
+        check_command("sdkmanager", &["--version"], "Android SDK Manager"),
+    );
+    let mut checks = vec![node, npm, python, cargo, flutter, java, gradle, adb, sdkmanager, check_android_sdk()];
     // Python is commonly installed under python3 on Linux/macOS.
     if !checks[2].available {
         checks[2] = check_command("python3", &["--version"], "Python 3").await;
     }
     checks
 }
-
 #[tauri::command]
 pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJobState>, root_path: String, profile: String) -> Result<BuildResult, String> {
     let root = approved_workspace(&app, &root_path)?;
