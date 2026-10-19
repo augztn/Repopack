@@ -313,7 +313,7 @@ fn package_has_dependency(root: &Path, dependency: &str) -> bool {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![prepare_source, runner::check_build_tools, runner::run_approved_build])
+        .invoke_handler(tauri::generate_handler![prepare_source, runner::check_build_tools, runner::run_approved_build, runner::open_artifact_folder])
         .run(tauri::generate_context!())
         .expect("error while running Repopack");
 }
