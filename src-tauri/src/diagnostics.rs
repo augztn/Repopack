@@ -52,3 +52,21 @@ pub fn export_diagnostic_text(app: AppHandle, destination_path: String) -> Resul
     else { fs::write(&destination, "No diagnostic log has been recorded yet.").map_err(|e| e.to_string())?; }
     Ok(destination.to_string_lossy().into_owned())
 }
+
+pub fn initialize_session(app: &AppHandle) {
+    if let Ok(dir) = directory(app) {
+        let marker = dir.join("session-active");
+        if marker.exists() {
+            let _ = write_diagnostic_log(app.clone(), "warning".into(), "Previous app session ended unexpectedly; this may indicate a crash or forced close.".into());
+        }
+        let _ = fs::write(marker, b"active");
+        let _ = write_diagnostic_log(app.clone(), "system".into(), "Application session started.".into());
+    }
+}
+
+pub fn close_session(app: &AppHandle) {
+    if let Ok(dir) = directory(app) {
+        let _ = fs::remove_file(dir.join("session-active"));
+        let _ = write_diagnostic_log(app.clone(), "system".into(), "Application session ended normally.".into());
+    }
+}
