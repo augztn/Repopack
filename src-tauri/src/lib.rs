@@ -58,7 +58,7 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
             .build()
             .map_err(|e| format!("Could not initialize the downloader: {e}"))?;
 
-        let response = client
+        let mut response = client
             .get(&archive_url)
             .send()
             .await
@@ -70,14 +70,17 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
             return Err("The repository archive exceeds the 100 MB download limit for this preview.".into());
         }
 
-        let bytes = response
-            .bytes()
+        // Enforce the size cap while reading; do not buffer an unbounded HTTP response.
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
             .await
             .map_err(|e| format!("Could not read the downloaded archive: {e}"))?
-            .to_vec();
-
-        if bytes.len() > MAX_ARCHIVE_BYTES {
-            return Err("The repository archive exceeds the 100 MB download limit for this preview.".into());
+        {
+            if bytes.len().saturating_add(chunk.len()) > MAX_ARCHIVE_BYTES {
+                return Err("The repository archive exceeds the 100 MB download limit for this preview.".into());
+            }
+            bytes.extend_from_slice(&chunk);
         }
         (bytes, repo)
     } else {
