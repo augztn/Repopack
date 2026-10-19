@@ -63,14 +63,16 @@ jobs:
             exit 1
           fi
       - name: Upload platform packages
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: repopack-${{ matrix.platform }}
           path: package-out/${{ matrix.platform }}/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3
 
   combine-test-bundle:
+    if: github.event_name != 'pull_request'
     name: Combine installers into one ZIP
     needs: build-desktop
     runs-on: ubuntu-22.04
@@ -104,4 +106,4 @@ jobs:
           name: Repopack-cross-platform-test-bundle
           path: Repopack-cross-platform-test-bundle.zip
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3
