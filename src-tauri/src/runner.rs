@@ -353,6 +353,7 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             if !cfg!(target_os = "linux") {
                 return Err("DroidLab's AppImage profile must run on Linux. Use a Linux build host or choose a supported Windows workflow.".into());
             }
+            if !executable_available("bash") { return Err("Bash is missing from PATH.".into()); }
             ("bash", vec!["scripts/build-linux.sh"], "DroidLab Linux AppImage packaging script")
         }
         "rust-release" => {
