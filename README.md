@@ -108,3 +108,8 @@ If the app fails before its UI opens, it cannot display its export controls. Sta
 ## Automatic build profile and tool detection
 
 After source inspection, Repopack selects the profile suggested by detected project markers and automatically scans the local machine for relevant toolchains (Node.js/npm, Python, Cargo, Flutter, Java, Gradle, ADB, Android SDK Manager, and Android SDK). The build panel shows which tools are available and lists expected tools for the selected profile. You can still change the suggested profile manually. Builds are not launched automatically: review the profile and explicitly approve execution because repository scripts may run arbitrary code.
+
+
+## Python desktop projects (including DroidLab)
+
+Repopack recognizes Python GUI repositories whose entry point is nested at `src/app.py`. For DroidLab-shaped projects containing both `src/app.py` and `scripts/build-linux.sh`, it recommends the **DroidLab — Linux AppImage** profile and scans the project-specific prerequisites: Tkinter, PyInstaller, appimagetool, wget, tar, xz and Bash. The profile validates its Linux-only requirement and reports missing dependencies before invoking the repository's build script. AppImage packaging is not supported from a Windows/macOS host; use a Linux build host for this target.
