@@ -143,6 +143,8 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
         "flutter" => "flutter-apk",
         "android-gradle" => "android-debug-apk",
         "rust" => "rust-release",
+        "python-desktop-appimage" => "droidlab-appimage",
+        "python-desktop" => "python-desktop-package",
         "python" => "python-package",
         _ => "node-build",
     }.to_string();
@@ -282,6 +284,13 @@ fn detect_project(root: &Path) -> (String, Vec<String>, String) {
         "build.gradle",
         "build.gradle.kts",
         "index.html",
+        "src/app.py",
+        "app.py",
+        "main.py",
+        "run.py",
+        "scripts/build-linux.sh",
+        "scripts/run-portable.sh",
+        "pyinstaller.spec",
     ];
     let indicators: Vec<String> = markers.iter()
         .filter(|marker| root.join(marker).is_file())
@@ -302,6 +311,21 @@ fn detect_project(root: &Path) -> (String, Vec<String>, String) {
     }
     if root.join("package.json").is_file() {
         return ("node".into(), indicators, "A Node project was found. A successful web build does not automatically create a native installer; review its build script first.".into());
+    }
+    // Recognize DroidLab-style Python desktop applications whose entry point and
+    // platform packaging scripts live beneath src/ and scripts/.
+    if root.join("requirements.txt").is_file()
+        && root.join("src/app.py").is_file()
+        && root.join("scripts/build-linux.sh").is_file()
+    {
+        return ("python-desktop-appimage".into(), indicators,
+            "Linux desktop packaging script detected. Ensure python3-tk, TkinterDnD, PyInstaller, wget, tar, xz and appimagetool are available; the script downloads payload-dumper-go.".into());
+    }
+    if root.join("requirements.txt").is_file()
+        && (root.join("src/app.py").is_file() || root.join("app.py").is_file() || root.join("main.py").is_file())
+    {
+        return ("python-desktop".into(), indicators,
+            "Python desktop entry point found. Review dependencies and select desktop packaging appropriate for the current operating system.".into());
     }
     if root.join("pyproject.toml").is_file() || root.join("requirements.txt").is_file() {
         return ("python".into(), indicators, "Choose an explicit packaging profile (for example PyInstaller) and review dependency installation before execution.".into());
