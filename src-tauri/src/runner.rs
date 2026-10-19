@@ -496,7 +496,27 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             emit(&app, "warning", "Stopped waiting for stderr pipe closure after 5 seconds.");
         }
     }
-    let artifacts = if success { discover_artifacts(&root) } else { Vec::new() };
+    let mut artifacts = if success { discover_artifacts(&root) } else { Vec::new() };
+    if success && profile == "droidlab-appimage" {
+        // The AppImage script writes to dist/; preserve the artifact even if a
+        // different AppImage naming pattern is used by the upstream script.
+        if let Ok(entries) = fs::read_dir(root.join("dist")) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let is_appimage = path.extension().and_then(|e| e.to_str()).map(|ext| ext.eq_ignore_ascii_case("AppImage")).unwrap_or(false)
+                    || path.file_name().and_then(|n| n.to_str()).map(|name| name.to_ascii_lowercase().contains(".appimage")).unwrap_or(false);
+                if is_appimage && path.is_file() && !artifacts.iter().any(|item| item.path == path.to_string_lossy()) {
+                    let metadata = entry.metadata().ok();
+                    artifacts.push(BuildArtifact {
+                        name: entry.file_name().to_string_lossy().into_owned(),
+                        path: path.to_string_lossy().into_owned(),
+                        size_bytes: metadata.map(|m| m.len()).unwrap_or(0),
+                        kind: "AppImage".into(),
+                    });
+                }
+            }
+        }
+    }
     let message = if cancelled {
         format!("{label} was cancelled. Child processes spawned by the build tool may require platform-specific cleanup.")
     } else if timed_out {
