@@ -267,8 +267,9 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             return Err("The inspected folder is not a complete DroidLab source root (missing scripts/build-linux.sh or src/app.py). Re-import the full repository ZIP.".into());
         }
         for (command, label) in [("bash", "Bash"), ("wget", "wget"), ("tar", "tar"), ("xz", "xz")] {
-            if OsCommand::new(command).arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_err() {
-                return Err(format!("Missing required tool: {label}. Install it, then run Check tools again."));
+            let output = OsCommand::new(command).arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status();
+            if !matches!(output, Ok(status) if status.success()) {
+                return Err(format!("Missing required tool or failed version check: {label}. Install it and ensure it is on PATH, then run Check tools again."));
             }
         }
         let python = if cfg!(windows) { "python" } else { "python3" };
@@ -283,8 +284,8 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             return Err("PyInstaller is not installed for the active Python interpreter. Install it in the environment used by Repopack.".into());
         }
         let appimagetool = OsCommand::new("appimagetool").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status();
-        if appimagetool.is_err() {
-            return Err("appimagetool is missing. Install appimagetool or follow DroidLab's Linux build instructions before building.".into());
+        if !matches!(appimagetool, Ok(status) if status.success()) {
+            return Err("appimagetool is missing or failed to run. Install appimagetool or follow DroidLab's Linux build instructions before building.".into());
         }
     }
     let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {
