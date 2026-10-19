@@ -49,6 +49,12 @@ pub struct BuildArtifact {
     pub kind: String,
 }
 
+#[cfg(unix)]
+fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path).map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0).unwrap_or(false)
+}
+
 fn discover_artifacts(root: &Path) -> Vec<BuildArtifact> {
     let mut found = Vec::new();
     let mut stack: Vec<(PathBuf, usize)> = vec![(root.to_path_buf(), 0)];
@@ -85,6 +91,28 @@ fn discover_artifacts(root: &Path) -> Vec<BuildArtifact> {
             if let Some(kind) = artifact_kind {
                 let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
                 found.push(BuildArtifact { name, path: path.to_string_lossy().into_owned(), size_bytes, kind: kind.into() });
+            }
+        }
+    }
+    #[cfg(unix)]
+    {
+        let release_dir = root.join("target").join("release");
+        if let Ok(entries) = fs::read_dir(&release_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_none() && is_executable_file(&path) {
+                    if let Ok(metadata) = fs::metadata(&path) {
+                        let artifact_path = path.to_string_lossy().into_owned();
+                        if !found.iter().any(|artifact| artifact.path == artifact_path) {
+                            found.push(BuildArtifact {
+                                name: entry.file_name().to_string_lossy().into_owned(),
+                                path: artifact_path,
+                                size_bytes: metadata.len(),
+                                kind: "BIN".into(),
+                            });
+                        }
+                    }
+                }
             }
         }
     }
