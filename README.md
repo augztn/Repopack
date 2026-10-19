@@ -89,3 +89,11 @@ A source repository cannot always be turned into an app by one generic command. 
 ## Dependency preparation and export
 
 The `Prepare Node dependencies` profile requires explicit approval and uses `npm ci` when a lockfile is present, or `npm install` otherwise. Both may run lifecycle scripts and download code. Build execution has a 30-minute timeout for the main process; this is not a security sandbox and descendant processes may need platform-specific cleanup. Recognized artifacts can be exported through the native save dialog or viewed in their output folder.
+
+## Download cross-platform test installers
+
+The `Cross-platform test bundle` workflow builds Repopack natively on Windows, macOS, and Linux, then combines the resulting installers/bundles into one ZIP. It runs on pushes to `main`, pull requests targeting `main`, and manual workflow dispatch.
+
+To download it, open the repository's **Actions** tab, select **Cross-platform test bundle**, open a successful run, and download the `Repopack-cross-platform-test-bundle` artifact. The ZIP contains a folder for each desktop platform plus testing instructions. GitHub keeps these test artifacts for 14 days.
+
+These are unsigned test builds; they are separate native packages, not one executable that runs on every OS. Android APK output is not included until a Tauri Android project and Android build toolchain are configured.
