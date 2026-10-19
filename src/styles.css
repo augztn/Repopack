@@ -159,3 +159,5 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @media (max-width: 680px) { .artifact-row { align-items: flex-start; flex-wrap: wrap; } .artifact-row .button { margin-left: 57px; } }
 .artifact-actions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; justify-content: flex-end; }
 @media (max-width: 620px) { .artifact-actions { justify-content: flex-start; } }
+
+.build-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
