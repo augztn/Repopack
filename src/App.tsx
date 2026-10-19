@@ -98,7 +98,7 @@ export default function App() {
       const prepared = await invoke<SourceInfo>("prepare_source", { input });
       setResult(prepared);
       setBuildResult(null);
-      setBuildProfile(prepared.projectType === "tauri" ? "tauri-build" : prepared.projectType === "electron" ? "electron-build" : prepared.projectType === "flutter" ? "flutter-apk" : prepared.projectType === "android-gradle" ? "android-debug-apk" : prepared.projectType === "rust" ? "rust-release" : "node-build");
+      setBuildProfile(prepared.projectType === "tauri" ? "tauri-build" : prepared.projectType === "electron" ? "electron-build" : prepared.projectType === "flutter" ? "flutter-apk" : prepared.projectType === "android-gradle" ? "android-debug-apk" : prepared.projectType === "rust" ? "rust-release" : prepared.projectType === "python" ? "python-package" : "node-build");
       setPhase("Inspection complete");
       setLogs((current) => [
         ...current,
@@ -133,6 +133,8 @@ export default function App() {
       "npm-install": "npm ci / npm install (dependency setup)",
       "node-build": "npm run build",
       "rust-release": "cargo build --release",
+      "python-install": "Python dependency setup (pip install)",
+      "python-package": "PyInstaller single-file package",
       "electron-build": "npm run build (Electron project)",
       "electron-package": "Electron package script (dist/make/package)",
       "flutter-windows": "flutter build windows",
@@ -250,6 +252,8 @@ export default function App() {
                 <option value="tauri-build">Tauri desktop package</option>
                 <option value="node-build">Node / web build</option>
                 <option value="rust-release">Rust — release executable</option>
+                <option value="python-install">Python — install dependencies</option>
+                <option value="python-package">Python — package with PyInstaller</option>
                 <option value="electron-build">Electron project build script</option>
                 <option value="electron-package">Electron — package installer</option>
                 <option value="flutter-windows">Flutter — Windows</option>
