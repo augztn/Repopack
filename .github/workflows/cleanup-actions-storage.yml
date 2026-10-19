@@ -1,0 +1,66 @@
+name: Clean old GitHub Actions storage
+
+on:
+  schedule:
+    - cron: "23 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      artifact_days:
+        description: "Delete artifacts older than this many days"
+        required: false
+        default: "7"
+      run_days:
+        description: "Delete workflow runs older than this many days"
+        required: false
+        default: "30"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: repopack-actions-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Remove expired build artifacts and old runs
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Delete old artifacts and workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_DAYS: ${{ inputs.artifact_days || '7' }}
+          RUN_DAYS: ${{ inputs.run_days || '30' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$ARTIFACT_DAYS" =~ ^[0-9]+$ ]] || ! [[ "$RUN_DAYS" =~ ^[0-9]+$ ]]; then
+            echo "Retention periods must be whole numbers of days."
+            exit 1
+          fi
+
+          artifact_cutoff="$(date -u -d "${ARTIFACT_DAYS} days ago" +%s)"
+          run_cutoff="$(date -u -d "${RUN_DAYS} days ago" +%s)"
+
+          echo "Removing artifacts created before $(date -u -d "@$artifact_cutoff" --iso-8601=seconds)"
+          while IFS=$'\t' read -r artifact_id created_at; do
+            [[ -n "${artifact_id:-}" ]] || continue
+            created_epoch="$(date -u -d "$created_at" +%s)"
+            if (( created_epoch < artifact_cutoff )); then
+              echo "Deleting artifact $artifact_id created $created_at"
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
+            fi
+          done < <(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.expired == false) | [.id, .created_at] | @tsv')
+
+          echo "Removing workflow runs created before $(date -u -d "@$run_cutoff" --iso-8601=seconds)"
+          while IFS=$'\t' read -r run_id created_at; do
+            [[ -n "${run_id:-}" ]] || continue
+            [[ "$run_id" == "$GITHUB_RUN_ID" ]] && continue
+            created_epoch="$(date -u -d "$created_at" +%s)"
+            if (( created_epoch < run_cutoff )); then
+              echo "Deleting workflow run $run_id created $created_at"
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id"
+            fi
+          done < <(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" --jq '.workflow_runs[] | [.id, .created_at] | @tsv')
