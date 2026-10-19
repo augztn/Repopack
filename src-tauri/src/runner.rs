@@ -227,14 +227,41 @@ fn executable_available(command: &str) -> bool {
     false
 }
 
+fn find_droidlab_root(start: &Path) -> Option<PathBuf> {
+    let mut stack: Vec<(PathBuf, usize)> = vec![(start.to_path_buf(), 0)];
+    let mut visited = 0usize;
+    while let Some((directory, depth)) = stack.pop() {
+        if depth > 5 || visited >= 3000 { continue; }
+        visited += 1;
+        if directory.join("scripts/build-linux.sh").is_file() && directory.join("src/app.py").is_file() {
+            return Some(directory);
+        }
+        let entries = match fs::read_dir(&directory) { Ok(entries) => entries, Err(_) => continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if matches!(name.as_str(), ".git" | "node_modules" | ".venv" | "venv" | "__pycache__" | "dist" | "build" | "target" | ".dart_tool") {
+                continue;
+            }
+            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 pub async fn check_project_build_tools(root_path: String) -> Result<Vec<ToolCheck>, String> {
     let root = PathBuf::from(&root_path).canonicalize().map_err(|e| format!("Project workspace is unavailable: {e}"))?;
     if !root.is_dir() { return Err("Project root is not a directory.".into()); }
 
     let checks = check_build_tools().await;
-    let is_droidlab = root.join("scripts/build-linux.sh").is_file() && root.join("src/app.py").is_file();
-    if !is_droidlab { return Ok(checks); }
+    // ZIPs can contain an extra wrapper folder or nested project directory. Look
+    // for DroidLab's known entry point and Linux packaging script before deciding
+    // that only the generic toolchain applies.
+    let droidlab_root = find_droidlab_root(&root);
+    if droidlab_root.is_none() { return Ok(checks); }
 
     let mut all = checks;
     if cfg!(target_os = "linux") {
