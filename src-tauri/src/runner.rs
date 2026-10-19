@@ -260,6 +260,20 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             }
             ("npm", vec!["run", "build"], "npm run build")
         }
+        "electron-package" => {
+            if !root.join("package.json").is_file() {
+                return Err("Electron packaging requires package.json in the project root.".into());
+            }
+            if crate::package_has_script(&root, "dist") {
+                ("npm", vec!["run", "dist"], "npm run dist (Electron packaging)")
+            } else if crate::package_has_script(&root, "make") {
+                ("npm", vec!["run", "make"], "npm run make (Electron packaging)")
+            } else if crate::package_has_script(&root, "package") {
+                ("npm", vec!["run", "package"], "npm run package (Electron packaging)")
+            } else {
+                return Err("No recognized Electron packaging script found. Add a reviewed 'dist', 'make', or 'package' script to package.json.".into());
+            }
+        }
         "electron-build" => {
             if !root.join("package.json").is_file() {
                 return Err("Electron build requires package.json in the project root.".into());
