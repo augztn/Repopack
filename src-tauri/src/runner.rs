@@ -1,4 +1,4 @@
-use std::{path::{Path, PathBuf}, process::Stdio};
+use std::{fs, path::{Path, PathBuf}, process::{Command as OsCommand, Stdio}};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::{io::{AsyncBufReadExt, BufReader}, process::Command};
 
@@ -25,6 +25,77 @@ pub struct BuildResult {
     pub exit_code: Option<i32>,
     pub success: bool,
     pub message: String,
+    pub artifacts: Vec<BuildArtifact>,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildArtifact {
+    pub name: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub kind: String,
+}
+
+fn discover_artifacts(root: &Path) -> Vec<BuildArtifact> {
+    let mut found = Vec::new();
+    let mut stack: Vec<(PathBuf, usize)> = vec![(root.to_path_buf(), 0)];
+    let mut visited = 0usize;
+    while let Some((directory, depth)) = stack.pop() {
+        if depth > 10 || visited >= 20_000 { break; }
+        let entries = match fs::read_dir(&directory) { Ok(entries) => entries, Err(_) => continue };
+        for entry in entries.flatten() {
+            visited += 1;
+            if visited >= 20_000 { break; }
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let kind = match entry.file_type() { Ok(kind) => kind, Err(_) => continue };
+            if kind.is_symlink() { continue; }
+            if kind.is_dir() {
+                if !matches!(name.as_str(), ".git" | "node_modules" | ".dart_tool" | ".idea" | ".vscode") {
+                    stack.push((path, depth + 1));
+                }
+                continue;
+            }
+            if !kind.is_file() { continue; }
+            let lower = name.to_ascii_lowercase();
+            let ext = path.extension().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
+            let artifact_kind = if lower.ends_with(".tar.gz") { Some("TAR.GZ") } else {
+                match ext.as_str() {
+                    "apk" => Some("APK"), "aab" => Some("AAB"), "exe" => Some("EXE"),
+                    "msi" => Some("MSI"), "appimage" => Some("AppImage"), "deb" => Some("DEB"),
+                    "rpm" => Some("RPM"), "dmg" => Some("DMG"), "pkg" => Some("PKG"),
+                    "appx" => Some("APPX"), "msix" => Some("MSIX"), "zip" => Some("ZIP"),
+                    "jar" => Some("JAR"), "ipa" => Some("IPA"), "bin" => Some("BIN"),
+                    _ => None,
+                }
+            };
+            if let Some(kind) = artifact_kind {
+                let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                found.push(BuildArtifact { name, path: path.to_string_lossy().into_owned(), size_bytes, kind: kind.into() });
+            }
+        }
+    }
+    found.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    found
+}
+
+#[tauri::command]
+pub fn open_artifact_folder(app: AppHandle, artifact_path: String) -> Result<(), String> {
+    let path = Path::new(&artifact_path).canonicalize().map_err(|e| format!("Artifact path is unavailable: {e}"))?;
+    let cache = app.path().app_cache_dir().map_err(|e| format!("Cannot resolve app cache: {e}"))?
+        .canonicalize().map_err(|e| format!("Cannot resolve app cache: {e}"))?;
+    if !path.starts_with(&cache) || !path.is_file() {
+        return Err("Only files inside Repopack's private workspace can be opened this way.".into());
+    }
+    let folder = path.parent().ok_or("Artifact has no parent folder.")?;
+    #[cfg(target_os = "windows")]
+    let result = OsCommand::new("explorer").arg(folder).spawn();
+    #[cfg(target_os = "macos")]
+    let result = OsCommand::new("open").arg(folder).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let result = OsCommand::new("xdg-open").arg(folder).spawn();
+    result.map(|_| ()).map_err(|e| format!("Could not open artifact folder: {e}"))
 }
 
 fn approved_workspace(app: &AppHandle, root: &str) -> Result<PathBuf, String> {
@@ -143,7 +214,17 @@ pub async fn run_approved_build(app: AppHandle, root_path: String, profile: Stri
     let _ = stdout_task.await;
     let _ = stderr_task.await;
     let success = status.success();
-    let message = if success { format!("{label} completed successfully.") } else { format!("{label} failed with exit code {:?}.", status.code()) };
+    let artifacts = if success { discover_artifacts(&root) } else { Vec::new() };
+    let message = if success {
+        if artifacts.is_empty() { format!("{label} completed successfully, but no recognized output artifact was found.") }
+        else { format!("{label} completed successfully; found {} artifact(s).", artifacts.len()) }
+    } else { format!("{label} failed with exit code {:?}.", status.code()) };
     emit(&app, if success { "success" } else { "error" }, &message);
-    Ok(BuildResult { profile, exit_code: status.code(), success, message })
+    if success && artifacts.is_empty() {
+        emit(&app, "warning", "Build exited successfully, but no recognized installer/package was found. A successful process does not guarantee an installable artifact.");
+    }
+    for artifact in &artifacts {
+        emit(&app, "info", format!("Artifact: {} ({} bytes) — {}", artifact.name, artifact.size_bytes, artifact.path));
+    }
+    Ok(BuildResult { profile, exit_code: status.code(), success, message, artifacts })
 }
