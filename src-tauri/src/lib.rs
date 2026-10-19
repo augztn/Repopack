@@ -3,7 +3,7 @@ mod runner;
 use serde::Serialize;
 use std::{
     fs::{self, File},
-    io::{self, Cursor},
+    io::{self, Cursor, Read},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -112,7 +112,10 @@ async fn prepare_source(app: AppHandle, input: String) -> Result<SourceInfo, Str
     let extracted_dir = job_dir.join("source");
     fs::create_dir_all(&extracted_dir).map_err(|e| format!("Could not create extraction directory: {e}"))?;
 
-    extract_archive(&archive_bytes, &extracted_dir)?;
+    if let Err(error) = extract_archive(&archive_bytes, &extracted_dir) {
+        let _ = fs::remove_dir_all(&job_dir);
+        return Err(error);
+    }
     log(&app, "success", "ZIP extraction finished. Path traversal and symlinks are rejected.");
 
     let root = find_project_root(&extracted_dir);
@@ -184,8 +187,9 @@ fn extract_archive(bytes: &[u8], destination: &Path) -> Result<(), String> {
             continue;
         }
 
-        extracted_bytes = extracted_bytes.saturating_add(entry.size());
-        if extracted_bytes > MAX_EXTRACTED_BYTES {
+        // Reject obviously oversized entries early, but also enforce the cap against
+        // bytes actually decompressed and written (ZIP metadata is untrusted).
+        if entry.size() > MAX_EXTRACTED_BYTES.saturating_sub(extracted_bytes) {
             return Err("The expanded archive exceeds the 400 MB extraction limit.".into());
         }
 
@@ -194,8 +198,13 @@ fn extract_archive(bytes: &[u8], destination: &Path) -> Result<(), String> {
         }
         let mut target = File::create(&output_path)
             .map_err(|e| format!("Could not create extracted file: {e}"))?;
-        io::copy(&mut entry, &mut target)
+        let remaining = MAX_EXTRACTED_BYTES.saturating_sub(extracted_bytes);
+        let copied = io::copy(&mut entry.take(remaining.saturating_add(1)), &mut target)
             .map_err(|e| format!("Could not extract {}: {e}", output_path.display()))?;
+        if copied > remaining {
+            return Err("The expanded archive exceeds the 400 MB extraction limit.".into());
+        }
+        extracted_bytes = extracted_bytes.saturating_add(copied);
     }
     Ok(())
 }
