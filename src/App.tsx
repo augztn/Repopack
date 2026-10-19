@@ -18,7 +18,7 @@ const phases = [
   { title: "Source", detail: "GitHub URL or local ZIP" },
   { title: "Extract", detail: "Safe local workspace" },
   { title: "Detect", detail: "Framework and build markers" },
-  { title: "Build", detail: "Approval-based runner (next milestone)" },
+  { title: "Build", detail: "Approved local build profiles" },
 ];
 
 function ClockTime() {
@@ -213,13 +213,13 @@ export default function App() {
           </section>
 
           <section className="workflow-section">
-            <div className="section-title-row"><div><div className="eyebrow">PIPELINE</div><h2>Build workflow</h2></div><span className={`status-pill ${busy ? "working" : detectedColor}`}><span />{phase}</span></div>
+            <div className="section-title-row"><div><div className="eyebrow">PIPELINE</div><h2>Build workflow</h2></div><span className={`status-pill ${busy || building ? "working" : detectedColor}`}><span />{phase}</span></div>
             <div className="phase-grid">
               {phases.map((item, index) => {
-                const completed = Boolean(result) && index < 3;
-                const active = busy && index < 3;
+                const completed = (Boolean(result) && index < 3) || (Boolean(buildResult?.success) && index === 3);
+                const active = (busy && index < 3) || (building && index === 3);
                 return <div className={`phase-card ${completed ? "completed" : ""} ${active ? "current" : ""}`} key={item.title}>
-                  <div className="phase-top"><span className="phase-index">{completed ? "✓" : `0${index + 1}`}</span>{index < 3 && <span className="phase-state">{completed ? "DONE" : active && index === 0 ? "RUNNING" : "WAITING"}</span>}{index === 3 && <span className="phase-state future">PLANNED</span>}</div>
+                  <div className="phase-top"><span className="phase-index">{completed ? "✓" : `0${index + 1}`}</span>{index < 3 && <span className="phase-state">{completed ? "DONE" : active && index === 0 ? "RUNNING" : "WAITING"}</span>}{index === 3 && <span className={`phase-state ${completed ? "" : active ? "" : "future"}`}>{completed ? "DONE" : active ? "RUNNING" : "READY"}</span>}</div>
                   <strong>{item.title}</strong><p>{item.detail}</p>
                   <div className="phase-bar"><span style={{ width: completed ? "100%" : active && index === 0 ? "48%" : "0%" }} /></div>
                 </div>;
