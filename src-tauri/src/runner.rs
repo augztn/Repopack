@@ -248,6 +248,23 @@ pub async fn run_approved_build(app: AppHandle, state: tauri::State<'_, BuildJob
             }
             ("npm", vec!["run", "tauri", "--", "build"], "npm run tauri build")
         }
+        "python-install" => {
+            let python = if cfg!(windows) { "python" } else { "python3" };
+            if root.join("requirements.txt").is_file() {
+                (python, vec!["-m", "pip", "install", "-r", "requirements.txt"], "Python dependency installation")
+            } else if root.join("pyproject.toml").is_file() {
+                (python, vec!["-m", "pip", "install", "."], "Install Python project from pyproject.toml")
+            } else {
+                return Err("Python dependency setup requires requirements.txt or pyproject.toml.".into());
+            }
+        }
+        "python-package" => {
+            let entrypoint = ["main.py", "app.py", "run.py"].iter().copied()
+                .find(|candidate| root.join(candidate).is_file())
+                .ok_or("Could not infer a Python entry point. Add main.py, app.py, or run.py at the project root.")?;
+            let python = if cfg!(windows) { "python" } else { "python3" };
+            (python, vec!["-m", "PyInstaller", "--onefile", "--clean", "--noconfirm", entrypoint], "PyInstaller single-file package")
+        }
         "rust-release" => {
             if !root.join("Cargo.toml").is_file() {
                 return Err("Rust release builds require Cargo.toml in the project root.".into());
