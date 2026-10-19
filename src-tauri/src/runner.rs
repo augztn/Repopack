@@ -96,20 +96,22 @@ fn discover_artifacts(root: &Path) -> Vec<BuildArtifact> {
     }
     #[cfg(unix)]
     {
-        let release_dir = root.join("target").join("release");
-        if let Ok(entries) = fs::read_dir(&release_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_none() && is_executable_file(&path) {
-                    if let Ok(metadata) = fs::metadata(&path) {
-                        let artifact_path = path.to_string_lossy().into_owned();
-                        if !found.iter().any(|artifact| artifact.path == artifact_path) {
-                            found.push(BuildArtifact {
-                                name: entry.file_name().to_string_lossy().into_owned(),
-                                path: artifact_path,
-                                size_bytes: metadata.len(),
-                                kind: "BIN".into(),
-                            });
+        for relative_dir in ["target/release", "dist"] {
+            let output_dir = root.join(relative_dir);
+            if let Ok(entries) = fs::read_dir(&output_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().is_none() && is_executable_file(&path) {
+                        if let Ok(metadata) = fs::metadata(&path) {
+                            let artifact_path = path.to_string_lossy().into_owned();
+                            if !found.iter().any(|artifact| artifact.path == artifact_path) {
+                                found.push(BuildArtifact {
+                                    name: entry.file_name().to_string_lossy().into_owned(),
+                                    path: artifact_path,
+                                    size_bytes: metadata.len(),
+                                    kind: "BIN".into(),
+                                });
+                            }
                         }
                     }
                 }
