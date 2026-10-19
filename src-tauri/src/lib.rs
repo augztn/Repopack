@@ -346,7 +346,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(runner::BuildJobState::default())
-        .invoke_handler(tauri::generate_handler![prepare_source, diagnostics::write_diagnostic_log, diagnostics::export_diagnostic_logs, runner::check_build_tools, runner::run_approved_build, runner::cancel_build, runner::open_artifact_folder, runner::export_artifact])
+        .invoke_handler(tauri::generate_handler![prepare_source, diagnostics::write_diagnostic_log, diagnostics::export_diagnostic_logs, diagnostics::export_diagnostic_text, runner::check_build_tools, runner::run_approved_build, runner::cancel_build, runner::open_artifact_folder, runner::export_artifact])
         .run(tauri::generate_context!())
         .expect("error while running Repopack");
 }
