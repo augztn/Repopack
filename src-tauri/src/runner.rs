@@ -1,6 +1,6 @@
-use std::{fs, path::{Path, PathBuf}, process::{Command as OsCommand, Stdio}};
+use std::{fs, path::{Path, PathBuf}, process::{Command as OsCommand, Stdio}, time::Duration};
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::{io::{AsyncBufReadExt, BufReader}, process::Command};
+use tokio::{io::{AsyncBufReadExt, BufReader}, process::Command, time};
 
 #[derive(Clone, serde::Serialize)]
 struct RunnerLog { level: String, message: String }
@@ -98,6 +98,29 @@ pub fn open_artifact_folder(app: AppHandle, artifact_path: String) -> Result<(),
     result.map(|_| ()).map_err(|e| format!("Could not open artifact folder: {e}"))
 }
 
+
+#[tauri::command]
+pub fn export_artifact(app: AppHandle, artifact_path: String, destination_path: String) -> Result<(), String> {
+    let source = Path::new(&artifact_path).canonicalize()
+        .map_err(|e| format!("Artifact path is unavailable: {e}"))?;
+    let cache = app.path().app_cache_dir().map_err(|e| format!("Cannot resolve app cache: {e}"))?
+        .canonicalize().map_err(|e| format!("Cannot resolve app cache: {e}"))?;
+    if !source.starts_with(&cache) || !source.is_file() {
+        return Err("Only files inside Repopack's private workspace can be exported.".into());
+    }
+    let destination = PathBuf::from(destination_path);
+    if destination.exists() && destination.is_dir() {
+        return Err("Choose a destination filename, not a folder.".into());
+    }
+    if let Some(parent) = destination.parent() {
+        if !parent.is_dir() {
+            return Err("The destination folder does not exist.".into());
+        }
+    }
+    fs::copy(&source, &destination).map_err(|e| format!("Could not export artifact: {e}"))?;
+    Ok(())
+}
+
 fn approved_workspace(app: &AppHandle, root: &str) -> Result<PathBuf, String> {
     let path = Path::new(root).canonicalize().map_err(|e| format!("Workspace path is unavailable: {e}"))?;
     let cache = app.path().app_cache_dir().map_err(|e| format!("Cannot resolve app cache: {e}"))?
@@ -132,6 +155,8 @@ pub async fn check_build_tools() -> Vec<ToolCheck> {
         check_command("flutter", &["--version"], "Flutter").await,
         check_command("java", &["-version"], "Java").await,
         check_command("gradle", &["--version"], "Gradle").await,
+        check_command("adb", &["version"], "Android Debug Bridge").await,
+        check_command("sdkmanager", &["--version"], "Android SDK Manager").await,
     ];
     // Python is commonly installed under python3 on Linux/macOS.
     if !checks[2].available {
@@ -143,7 +168,7 @@ pub async fn check_build_tools() -> Vec<ToolCheck> {
 #[tauri::command]
 pub async fn run_approved_build(app: AppHandle, root_path: String, profile: String) -> Result<BuildResult, String> {
     let root = approved_workspace(&app, &root_path)?;
-    let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {
+    let (program, args, label): (&str, Vec<&str>, &str) = match profile.as_str() {\n        "npm-install" => {\n            if !root.join("package.json").is_file() {\n                return Err("Dependency preparation requires package.json in the project root.".into());\n            }\n            if root.join("package-lock.json").is_file() || root.join("npm-shrinkwrap.json").is_file() {\n                ("npm", vec!["ci", "--no-audit", "--no-fund"], "npm ci (dependency preparation)")\n            } else {\n                ("npm", vec!["install", "--no-audit", "--no-fund"], "npm install (dependency preparation)")\n            }\n        }
         "tauri-build" => {
             if !root.join("src-tauri/tauri.conf.json").is_file() || !root.join("package.json").is_file() {
                 return Err("Tauri build requires package.json and src-tauri/tauri.conf.json in the project root.".into());
@@ -239,5 +264,5 @@ pub async fn run_approved_build(app: AppHandle, root_path: String, profile: Stri
     for artifact in &artifacts {
         emit(&app, "info", format!("Artifact: {} ({} bytes) — {}", artifact.name, artifact.size_bytes, artifact.path));
     }
-    Ok(BuildResult { profile, exit_code: status.code(), success, message, artifacts })
+    Ok(BuildResult { profile, exit_code, success, message, artifacts })
 }
